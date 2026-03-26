@@ -233,8 +233,25 @@ export class BrowserManager {
     }
   }
 
-  // 通过 HTTP API 获取 WebSocket 端点
-  private getWsEndpointFromHttp(port: number): Promise<string> {
+  // 通过 HTTP API 获取 WebSocket 端点（带重试机制）
+  private async getWsEndpointFromHttp(port: number, retries = 5, delayMs = 1000): Promise<string> {
+    for (let i = 0; i < retries; i++) {
+      try {
+        await this.wait(delayMs);
+        const result = await this.httpRequest(port);
+        if (result) return result;
+      } catch (error) {
+        writeLog(`获取 WebSocket 端点尝试 ${i + 1}/${retries} 失败: ${error}`, 'WARN');
+      }
+    }
+    throw new Error(`在 ${retries} 次尝试后仍无法获取 WebSocket 端点`);
+  }
+
+  private wait(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  private httpRequest(port: number): Promise<string> {
     return new Promise((resolve, reject) => {
       const req = http.request(
         {
@@ -242,7 +259,7 @@ export class BrowserManager {
           port,
           path: '/json/version',
           method: 'GET',
-          timeout: 5000,
+          timeout: 3000,
         },
         (res) => {
           let data = '';
@@ -265,7 +282,7 @@ export class BrowserManager {
       req.on('error', (e) => reject(new Error(`HTTP 请求失败: ${e.message}`)));
       req.on('timeout', () => {
         req.destroy();
-        reject(new Error('获取 WebSocket 端点超时'));
+        reject(new Error('HTTP 请求超时'));
       });
     });
   }
