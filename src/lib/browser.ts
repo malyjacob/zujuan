@@ -1,9 +1,8 @@
 import { chromium, Browser, Page, BrowserContext } from 'playwright';
 import * as path from 'path';
 import * as fs from 'fs';
-import * as os from 'os';
-import * as http from 'http';
 import { spawn, ChildProcess } from 'child_process';
+import * as http from 'http';
 import terminalImage from 'terminal-image';
 import { configManager } from './config';
 import { BrowserState } from '../types';
@@ -28,7 +27,6 @@ function writeLog(message: string, level: 'INFO' | 'WARN' | 'ERROR' = 'INFO'): v
 
 // 浏览器状态文件管理
 export class BrowserStateManager {
-  // 保存浏览器状态
   static save(state: BrowserState): void {
     try {
       fs.writeFileSync(BROWSER_STATE_FILE, JSON.stringify(state, null, 2), 'utf-8');
@@ -38,7 +36,6 @@ export class BrowserStateManager {
     }
   }
 
-  // 读取浏览器状态
   static load(): BrowserState | null {
     try {
       if (fs.existsSync(BROWSER_STATE_FILE)) {
@@ -51,7 +48,6 @@ export class BrowserStateManager {
     return null;
   }
 
-  // 删除浏览器状态
   static clear(): void {
     try {
       if (fs.existsSync(BROWSER_STATE_FILE)) {
@@ -63,7 +59,6 @@ export class BrowserStateManager {
     }
   }
 
-  // 检查进程是否存活
   static isProcessRunning(pid: number): boolean {
     if (!pid || pid === 0) return false;
     try {
@@ -74,25 +69,18 @@ export class BrowserStateManager {
     }
   }
 
-  // 检查浏览器是否在运行
   static isBrowserRunning(): boolean {
     const state = this.load();
     if (!state) return false;
-
-    // 如果 PID 有效，检查进程是否存活
     if (state.pid && state.pid !== 0) {
       return this.isProcessRunning(state.pid);
     }
-
-    // 如果 PID 无效或为 0，检查 WebSocket 端点是否可连接
     if (state.wsEndpoint) {
-      return true; // 假设可连接
+      return true;
     }
-
     return false;
   }
 
-  // 杀掉进程
   static killProcess(pid: number): boolean {
     if (!pid || pid === 0) {
       writeLog('PID 为空或 0，跳过进程终止');
@@ -109,11 +97,60 @@ export class BrowserStateManager {
   }
 }
 
+// 辅助函数：通过 HTTP 获取 WebSocket URL
+async function getWsEndpoint(port: number, retries = 15, delayMs = 2000): Promise<string> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const result = await new Promise<string>((resolve, reject) => {
+        const req = http.request(
+          {
+            hostname: '127.0.0.1',
+            port,
+            path: '/json/version',
+            method: 'GET',
+            timeout: 3000,
+          },
+          (res) => {
+            let data = '';
+            res.on('data', (chunk) => (data += chunk));
+            res.on('end', () => {
+              try {
+                const version = JSON.parse(data);
+                if (version.webSocketDebuggerUrl) {
+                  resolve(version.webSocketDebuggerUrl);
+                } else {
+                  reject(new Error('未找到 webSocketDebuggerUrl'));
+                }
+              } catch (e) {
+                reject(new Error('解析版本信息失败: ' + data));
+              }
+            });
+          }
+        );
+        req.on('error', reject);
+        req.on('timeout', () => {
+          req.destroy();
+          reject(new Error('HTTP 请求超时'));
+        });
+        req.end();
+      });
+      return result;
+    } catch (error) {
+      // 静默忽略，等待下一次重试
+    }
+    if (i < retries - 1) {
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+  throw new Error(`在 ${retries} 次尝试后仍无法获取 WebSocket 端点`);
+}
+
 export class BrowserManager {
   private static instance: BrowserManager | null = null;
   private browser: Browser | null = null;
   private context: BrowserContext | null = null;
   private page: Page | null = null;
+  private chromeProcess: ChildProcess | null = null;
   private wsEndpoint: string | null = null;
   private pid: number | null = null;
 
@@ -126,11 +163,10 @@ export class BrowserManager {
     return BrowserManager.instance;
   }
 
-  // 启动浏览器（start 命令使用）
+  // 启动浏览器（使用 child_process）
   async launch(): Promise<void> {
     writeLog('开始启动浏览器...');
 
-    // 检查是否已在运行
     if (BrowserStateManager.isBrowserRunning()) {
       const state = BrowserStateManager.load();
       console.log(`浏览器已在运行 (PID: ${state?.pid})，请先使用 shutup 命令关闭`);
@@ -142,53 +178,69 @@ export class BrowserManager {
     const headless = configManager.get('headless');
     const port = configManager.get('browserPort');
 
-    const options: any = {
-      headless,
-      args: [
-        `--remote-debugging-port=${port}`,
-        '--no-first-run',
-        '--no-default-browser-check',
-        '--disable-dev-shm-usage',
-        '--no-sandbox',
-      ],
-    };
+    // 找到 chromium 可执行文件
+    const chromiumPath = browserPath || 
+      '/root/.cache/ms-playwright/chromium-1208/chrome-linux64/chrome';
 
-    if (browserPath && fs.existsSync(browserPath)) {
-      options.executablePath = browserPath;
-    } else if (browserPath) {
-      writeLog(`浏览器路径不存在: ${browserPath}`, 'WARN');
+    if (!fs.existsSync(chromiumPath)) {
+      throw new Error(`浏览器可执行文件不存在: ${chromiumPath}`);
     }
 
-    writeLog(`启动 Chromium，端口: ${port}`);
+    const args = [
+      headless ? '--headless' : '',
+      `--remote-debugging-port=${port}`,
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--disable-dev-shm-usage',
+      '--no-sandbox',
+      `--user-data-dir=/tmp/zujuan-chrome-${port}`
+    ].filter(Boolean);
+
+    writeLog(`启动 Chromium: ${chromiumPath}`);
+    writeLog(`参数: ${args.join(' ')}`);
 
     try {
-      // 启动浏览器
-      this.browser = await chromium.launch(options);
-      writeLog('Chromium 进程已启动');
+      // 使用 child_process 启动浏览器（detached 模式）
+      this.chromeProcess = spawn(chromiumPath, args, {
+        detached: true,
+        stdio: 'ignore',
+      });
 
-      // 等待浏览器完全就绪后再获取 WebSocket 端点
-      await this.wait(3000);
+      this.pid = this.chromeProcess.pid || null;
+      this.chromeProcess.unref(); // 让进程独立于父进程
 
-      // 通过 HTTP API 获取 WebSocket 端点
-      this.wsEndpoint = await this.getWsEndpointFromHttp(port, 10, 2000);
-      writeLog(`WebSocket 端点: ${this.wsEndpoint}`);
-
-      // 通过 CDP 获取 PID
-      this.pid = await this.getBrowserPid(port);
       if (this.pid) {
         writeLog(`Chromium 进程已启动，PID: ${this.pid}`);
-      } else {
-        writeLog('无法获取 PID，将通过进程列表查找', 'WARN');
       }
 
-      this.context = await this.browser.newContext();
-      this.page = await this.context.newPage();
+      // 获取 WebSocket 端点
+      this.wsEndpoint = await getWsEndpoint(port);
+      writeLog(`WebSocket 端点: ${this.wsEndpoint}`);
+
+      // 通过 CDP 连接到浏览器
+      this.browser = await chromium.connectOverCDP(this.wsEndpoint);
+      writeLog('已连接到浏览器');
+
+      // 获取页面
+      const contexts = this.browser.contexts();
+      if (contexts.length > 0) {
+        this.context = contexts[0];
+        const pages = this.context.pages();
+        if (pages.length > 0) {
+          this.page = pages[0];
+        }
+      }
+
+      if (!this.page) {
+        this.context = await this.browser.newContext();
+        this.page = await this.context.newPage();
+      }
 
       // 访问初始页面
       await this.page.goto('https://zujuan.xkw.com', { waitUntil: 'domcontentloaded' });
       await this.page.waitForTimeout(2000);
 
-      // 移除页面覆盖层元素（如引导面板）
+      // 移除覆盖层
       await this.removeOverlay();
 
       // 检查登录状态
@@ -206,16 +258,11 @@ export class BrowserManager {
       // 保存登录状态
       await this.saveLoginState();
 
-      // 如果 PID 为 null，尝试通过进程查找
-      if (!this.pid) {
-        this.pid = await this.findBrowserPid();
-      }
-
-      // 保存浏览器状态（wsEndpoint 是必须的，pid 可以是 null）
-      if (this.wsEndpoint) {
+      // 保存浏览器状态
+      if (this.wsEndpoint && this.pid) {
         BrowserStateManager.save({
           wsEndpoint: this.wsEndpoint,
-          pid: this.pid || 0,
+          pid: this.pid,
           port,
           startedAt: new Date().toISOString(),
         });
@@ -228,136 +275,19 @@ export class BrowserManager {
     } catch (error) {
       writeLog(`浏览器启动失败: ${error}`, 'ERROR');
       // 清理
-      if (this.browser) {
-        await this.browser.close();
-        this.browser = null;
+      if (this.chromeProcess) {
+        try {
+          process.kill(this.pid!, 'SIGTERM');
+        } catch {}
       }
+      this.browser = null;
+      this.chromeProcess = null;
       BrowserStateManager.clear();
       throw error;
     }
   }
 
-  // 通过 HTTP API 获取 WebSocket 端点（带重试机制）
-  private async getWsEndpointFromHttp(port: number, retries = 5, delayMs = 1000): Promise<string> {
-    for (let i = 0; i < retries; i++) {
-      try {
-        await this.wait(delayMs);
-        const result = await this.httpRequest(port);
-        if (result) return result;
-      } catch (error) {
-        writeLog(`获取 WebSocket 端点尝试 ${i + 1}/${retries} 失败: ${error}`, 'WARN');
-      }
-    }
-    throw new Error(`在 ${retries} 次尝试后仍无法获取 WebSocket 端点`);
-  }
-
-  private wait(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  private httpRequest(port: number): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const req = http.request(
-        {
-          hostname: '127.0.0.1',
-          port,
-          path: '/json/version',
-          method: 'GET',
-          timeout: 3000,
-        },
-        (res) => {
-          let data = '';
-          res.on('data', (chunk) => (data += chunk));
-          res.on('end', () => {
-            try {
-              const version = JSON.parse(data);
-              if (version.webSocketDebuggerUrl) {
-                resolve(version.webSocketDebuggerUrl);
-              } else {
-                reject(new Error('未找到 webSocketDebuggerUrl'));
-              }
-            } catch (e) {
-              reject(new Error(`解析版本信息失败: ${data}`));
-            }
-          });
-        }
-      );
-
-      req.on('error', (e) => reject(new Error(`HTTP 请求失败: ${e.message}`)));
-      req.on('timeout', () => {
-        req.destroy();
-        reject(new Error('HTTP 请求超时'));
-      });
-    });
-  }
-
-  // 通过 CDP 获取浏览器 PID
-  private async getBrowserPid(port: number): Promise<number | null> {
-
-    try {
-      const CDP = require('playwright-core').CDP;
-      const cdp = await CDP({ port });
-      // 使用 Browser.getBrowserProcessId 获取 PID
-      const result = await cdp.send('Browser.getBrowserProcessId');
-      cdp.detach();
-      return result.pid;
-    } catch (error) {
-      writeLog(`获取浏览器 PID 失败: ${error}`, 'WARN');
-      return null;
-    }
-  }
-
-  // 通过进程列表查找浏览器 PID
-  private async findBrowserPid(): Promise<number | null> {
-    const browserPath = configManager.get('browserPath');
-    const { exec } = require('child_process');
-    const { promisify } = require('util');
-    const execAsync = promisify(exec);
-
-    try {
-      // 查找 Chrome 进程
-      if (process.platform === 'linux') {
-        const { stdout } = await execAsync(`pgrep -f "chrome.*--remote-debugging-port=${configManager.get('browserPort')}" | head -1`);
-        const pid = parseInt(stdout.trim());
-        if (pid && !isNaN(pid)) {
-          writeLog(`通过进程列表找到 PID: ${pid}`);
-          return pid;
-        }
-      }
-    } catch (error) {
-      writeLog(`查找浏览器 PID 失败: ${error}`, 'WARN');
-    }
-    return null;
-  }
-
-  // 移除页面覆盖层元素（如引导面板）
-  private async removeOverlay(): Promise<void> {
-    try {
-      const overlaySelector = 'div.ai-search-guide-panel';
-      const overlay = await this.page!.$(overlaySelector);
-
-      if (overlay) {
-        writeLog(`检测到覆盖层元素 ${overlaySelector}，正在移除...`);
-        // 隐藏或删除该元素
-        await this.page!.evaluate((sel) => {
-          const el = document.querySelector(sel) as HTMLElement | null;
-          if (el) {
-            el.style.display = 'none';
-            // 或者使用 remove() 完全删除
-            // el.remove();
-          }
-        }, overlaySelector);
-        console.log('已移除页面覆盖层');
-        writeLog('覆盖层元素已移除');
-        // 等待一小段时间让页面稳定
-        await this.page!.waitForTimeout(500);
-      }
-    } catch (error) {
-      writeLog(`移除覆盖层失败: ${error}`, 'WARN');
-    }
-  }
-
-  // 连接到已运行的浏览器（scrape 命令使用）
+  // 连接到已运行的浏览器
   async connect(): Promise<void> {
     writeLog('尝试连接到已运行的浏览器...');
 
@@ -377,14 +307,11 @@ export class BrowserManager {
     writeLog(`连接到浏览器，PID: ${state.pid}`);
 
     try {
-      // 使用 wsEndpoint 连接
-      const { chromium } = require('playwright');
       this.browser = await chromium.connectOverCDP(state.wsEndpoint);
       this.wsEndpoint = state.wsEndpoint;
       this.pid = state.pid;
 
-      // 获取现有上下文
-      const contexts = this.browser!.contexts();
+      const contexts = this.browser.contexts();
       if (contexts.length > 0) {
         this.context = contexts[0];
         const pages = this.context.pages();
@@ -394,7 +321,7 @@ export class BrowserManager {
       }
 
       if (!this.page) {
-        this.context = await this.browser!.newContext();
+        this.context = await this.browser.newContext();
         this.page = await this.context.newPage();
       }
 
@@ -403,11 +330,26 @@ export class BrowserManager {
     } catch (error) {
       writeLog(`连接浏览器失败: ${error}`, 'ERROR');
       BrowserStateManager.clear();
-      throw new Error(`连接浏览器失败: ${error}，请重新运行 start 命令`);
+      throw new Error(`连接浏览器失败，请重新运行 start 命令`);
     }
   }
 
-  // 检查登录状态
+  private async removeOverlay(): Promise<void> {
+    try {
+      const overlay = await this.page!.$('div.ai-search-guide-panel');
+      if (overlay) {
+        writeLog('移除覆盖层...');
+        await this.page!.evaluate(() => {
+          const el = document.querySelector('div.ai-search-guide-panel') as HTMLElement | null;
+          if (el) el.style.display = 'none';
+        });
+        await this.page!.waitForTimeout(500);
+      }
+    } catch (error) {
+      writeLog(`移除覆盖层失败: ${error}`, 'WARN');
+    }
+  }
+
   private async checkLoginStatus(): Promise<boolean> {
     try {
       const avatar = await this.page!.$('div.avatar img');
@@ -417,49 +359,28 @@ export class BrowserManager {
     }
   }
 
-  // 扫码登录流程
   private async doQRCodeLogin(): Promise<void> {
     try {
-      // 直接通过 JavaScript 调用登录函数，跳过 DOM 点击
+      // 直接通过 JS 调用登录函数
       console.log('正在触发登录函数...');
       await this.page!.evaluate(() => {
-        // 移除可能存在的覆盖层
-        const overlay = document.querySelector('div.ai-search-guide-panel');
-        if (overlay) {
-          (overlay as HTMLElement).style.display = 'none';
-        }
-        // 调用登录函数 - 使用 any 类型绕过 TypeScript 检查
+        const overlay = document.querySelector('div.ai-search-guide-panel') as HTMLElement | null;
+        if (overlay) overlay.style.display = 'none';
         const win = window as any;
         if (typeof win.logindiv === 'function') {
           win.logindiv();
-        } else {
-          // 尝试通过 href 触发
-          const loginLink = document.querySelector('a.login-btn[href^="javascript:"]');
-          if (loginLink) {
-            const href = loginLink.getAttribute('href');
-            if (href) {
-              const fnMatch = href.match(/javascript:(\w+)\(/);
-              if (fnMatch && fnMatch[1] && typeof win[fnMatch[1]] === 'function') {
-                win[fnMatch[1]]();
-              }
-            }
-          }
         }
       });
       await this.page!.waitForTimeout(2000);
-      console.log('已触发登录函数');
 
       // 等待二维码加载
       console.log('正在获取二维码...');
       await this.page!.waitForSelector('#qrcode canvas', { timeout: 5000 });
 
       const qrCodePath = configManager.get('qrCodePath');
-
-      // 截图二维码
       const qrcode = await this.page!.$('#qrcode');
       if (qrcode) {
         await qrcode.screenshot({ path: qrCodePath });
-
         try {
           console.log('\n' + await terminalImage.file(qrCodePath, { width: 30 }) + '\n');
         } catch {
@@ -467,17 +388,13 @@ export class BrowserManager {
         }
       }
 
-      console.log('请打开手机微信扫码登录（30秒内）...');
+      console.log('请打开手机微信扫码登录（60秒内）...');
 
-      // 等待扫码成功
       let loginSuccess = false;
       const startTime = Date.now();
 
-      while (Date.now() - startTime < 30000) {
+      while (Date.now() - startTime < 60000) {
         await this.page!.waitForTimeout(2000);
-
-        await this.page!.waitForTimeout(1000);
-
         const isLoggedIn = await this.checkLoginStatus();
         if (isLoggedIn) {
           loginSuccess = true;
@@ -485,7 +402,6 @@ export class BrowserManager {
           writeLog('扫码登录成功');
           break;
         }
-
         const qrcodeStillExists = await this.page!.$('#qrcode canvas');
         if (!qrcodeStillExists) {
           loginSuccess = true;
@@ -498,7 +414,7 @@ export class BrowserManager {
       if (!loginSuccess) {
         writeLog('扫码登录超时', 'ERROR');
         await this.shutdown();
-        throw new Error('扫码登录超时（30秒）');
+        throw new Error('扫码登录超时（60秒）');
       }
 
       await this.page!.waitForTimeout(2000);
@@ -510,7 +426,6 @@ export class BrowserManager {
     }
   }
 
-  // 保存登录状态
   private async saveLoginState(): Promise<void> {
     if (this.context) {
       await this.context.storageState({ path: STORAGE_STATE_FILE });
@@ -518,16 +433,13 @@ export class BrowserManager {
     }
   }
 
-  // 获取页面
   async getPage(): Promise<Page> {
     if (!this.page) {
-      // 如果没有页面，尝试连接
       await this.connect();
     }
     return this.page!;
   }
 
-  // 关闭连接（不关闭浏览器进程）
   async close(): Promise<void> {
     writeLog('关闭浏览器连接');
     if (this.browser) {
@@ -539,23 +451,26 @@ export class BrowserManager {
     }
   }
 
-  // 完全关闭浏览器进程（shutup 命令使用）
   async shutdown(): Promise<void> {
     writeLog('执行 shutdown，关闭浏览器进程');
 
-    // 先关闭连接
     if (this.browser) {
       await this.browser.close();
       this.browser = null;
     }
 
-    // 从状态文件读取 PID 并杀掉
+    if (this.chromeProcess && this.pid) {
+      try {
+        process.kill(this.pid, 'SIGTERM');
+      } catch {}
+      this.chromeProcess = null;
+    }
+
     const state = BrowserStateManager.load();
     if (state) {
       BrowserStateManager.killProcess(state.pid);
     }
 
-    // 清理状态
     this.context = null;
     this.page = null;
     this.wsEndpoint = null;
@@ -566,26 +481,10 @@ export class BrowserManager {
     writeLog('浏览器已完全关闭');
   }
 
-  // 截图
-  async screenshot(name: string, options?: any): Promise<Buffer> {
-    const page = await this.getPage();
-    const outputDir = configManager.get('outputDir');
-    const screenshotPath = path.join(outputDir, `${name}.png`);
-
-    await page.screenshot({
-      path: screenshotPath,
-      ...options,
-    });
-
-    return fs.readFileSync(screenshotPath);
-  }
-
-  // 检查是否已连接
   isConnected(): boolean {
     return this.browser !== null;
   }
 
-  // 检查浏览器是否在运行
   isRunning(): boolean {
     return BrowserStateManager.isBrowserRunning();
   }
