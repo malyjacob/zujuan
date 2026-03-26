@@ -64,6 +64,7 @@ export class BrowserStateManager {
 
   // 检查进程是否存活
   static isProcessRunning(pid: number): boolean {
+    if (!pid || pid === 0) return false;
     try {
       process.kill(pid, 0);
       return true;
@@ -76,11 +77,26 @@ export class BrowserStateManager {
   static isBrowserRunning(): boolean {
     const state = this.load();
     if (!state) return false;
-    return this.isProcessRunning(state.pid);
+
+    // 如果 PID 有效，检查进程是否存活
+    if (state.pid && state.pid !== 0) {
+      return this.isProcessRunning(state.pid);
+    }
+
+    // 如果 PID 无效或为 0，检查 WebSocket 端点是否可连接
+    if (state.wsEndpoint) {
+      return true; // 假设可连接
+    }
+
+    return false;
   }
 
   // 杀掉进程
   static killProcess(pid: number): boolean {
+    if (!pid || pid === 0) {
+      writeLog('PID 为空或 0，跳过进程终止');
+      return false;
+    }
     try {
       process.kill(pid, 'SIGTERM');
       writeLog(`已发送 SIGTERM 到进程 ${pid}`);
@@ -144,20 +160,20 @@ export class BrowserManager {
 
     writeLog(`启动 Chromium，端口: ${port}`);
 
-    let browserProcess: ChildProcess | null = null;
-
     try {
       // 启动浏览器
       this.browser = await chromium.launch(options) as ChromiumBrowser;
-      
-      // 尝试获取 PID（通过连接 CDP 获取）
-      this.wsEndpoint = await this.getWsEndpoint();
+
+      // 直接获取 WebSocket 端点
+      this.wsEndpoint = (this.browser as any).wsEndpoint();
       writeLog(`WebSocket 端点: ${this.wsEndpoint}`);
 
-      // 获取 PID - 通过 CDP
+      // 通过 CDP 获取 PID
       this.pid = await this.getBrowserPid();
       if (this.pid) {
         writeLog(`Chromium 进程已启动，PID: ${this.pid}`);
+      } else {
+        writeLog('无法获取 PID，将通过进程列表查找', 'WARN');
       }
 
       this.context = await this.browser.newContext();
@@ -185,14 +201,20 @@ export class BrowserManager {
       // 保存登录状态
       await this.saveLoginState();
 
-      // 保存浏览器状态
-      if (this.wsEndpoint && this.pid) {
+      // 如果 PID 为 null，尝试通过进程查找
+      if (!this.pid) {
+        this.pid = await this.findBrowserPid();
+      }
+
+      // 保存浏览器状态（wsEndpoint 是必须的，pid 可以是 null）
+      if (this.wsEndpoint) {
         BrowserStateManager.save({
           wsEndpoint: this.wsEndpoint,
-          pid: this.pid,
+          pid: this.pid || 0,
           port,
           startedAt: new Date().toISOString(),
         });
+        console.log('浏览器状态已保存');
       }
 
       console.log('浏览器启动成功！');
@@ -210,39 +232,44 @@ export class BrowserManager {
     }
   }
 
-  // 通过 CDP 获取 WebSocket 端点
-  private async getWsEndpoint(): Promise<string> {
-    const port = configManager.get('browserPort');
-    const CDP = require('playwright-core').CDP;
-    
-    try {
-      const cdp = await CDP({ port });
-      const wsEndpoint = cdp._connection._transport._wsEndpoint;
-      cdp.detach();
-      return wsEndpoint;
-    } catch (error) {
-      writeLog(`获取 WebSocket 端点失败: ${error}`, 'WARN');
-      // 构造默认的 WebSocket URL
-      return `ws://127.0.0.1:${port}`;
-    }
-  }
-
   // 通过 CDP 获取浏览器 PID
   private async getBrowserPid(): Promise<number | null> {
     const port = configManager.get('browserPort');
-    
+
     try {
       const CDP = require('playwright-core').CDP;
       const cdp = await CDP({ port });
-      const version = await cdp.Browser.getVersion();
+      // 使用 Browser.getBrowserProcessId 获取 PID
+      const result = await cdp.send('Browser.getBrowserProcessId');
       cdp.detach();
-      // 从版本信息中提取 PID（如果有的话）
-      // 否则返回 null，让 shutdown 使用状态文件中的 PID
-      return null;
+      return result.pid;
     } catch (error) {
       writeLog(`获取浏览器 PID 失败: ${error}`, 'WARN');
       return null;
     }
+  }
+
+  // 通过进程列表查找浏览器 PID
+  private async findBrowserPid(): Promise<number | null> {
+    const browserPath = configManager.get('browserPath');
+    const { exec } = require('child_process');
+    const { promisify } = require('util');
+    const execAsync = promisify(exec);
+
+    try {
+      // 查找 Chrome 进程
+      if (process.platform === 'linux') {
+        const { stdout } = await execAsync(`pgrep -f "chrome.*--remote-debugging-port=${configManager.get('browserPort')}" | head -1`);
+        const pid = parseInt(stdout.trim());
+        if (pid && !isNaN(pid)) {
+          writeLog(`通过进程列表找到 PID: ${pid}`);
+          return pid;
+        }
+      }
+    } catch (error) {
+      writeLog(`查找浏览器 PID 失败: ${error}`, 'WARN');
+    }
+    return null;
   }
 
   // 移除页面覆盖层元素（如引导面板）
