@@ -13,31 +13,6 @@
 - **持久化浏览器实例**（减少资源占用，避免频繁触发反爬）
 - 云端部署支持
 
-## 项目结构
-
-```
-zujuan/
-├── src/
-│   ├── commands/          # CLI 命令
-│   │   ├── config.ts      # 配置命令
-│   │   ├── scrape.ts      # 抓取命令
-│   │   ├── start.ts       # 启动浏览器命令
-│   │   ├── shutup.ts      # 关闭浏览器命令
-│   │   └── list.ts        # 知识点查询命令
-│   ├── lib/               # 核心库
-│   │   ├── browser.ts     # 浏览器管理（启动/连接/关闭）
-│   │   ├── config.ts      # 配置管理
-│   │   ├── ocr.ts        # OCR 识别
-│   │   ├── scraper.ts     # 抓取逻辑
-│   │   └── url-builder.ts # URL 构建
-│   ├── types/             # 类型定义
-│   └── index.ts           # 入口文件
-├── dist/                  # 编译输出
-├── .browser-state.json    # 浏览器状态文件（自动生成）
-├── storage-state.json      # 登录状态（自动生成）
-└── login-qrcode.png       # 登录二维码（自动生成）
-```
-
 ## 安装
 
 ```bash
@@ -50,21 +25,21 @@ npm run build
 ### 1. 启动浏览器并登录
 
 ```bash
-node dist/index.js start
+node ./dist/index.js start
 ```
 
-首次使用会显示二维码，用手机微信扫码登录。登录成功后浏览器将在后台运行。
+首次使用会显示二维码，用手机微信扫码登录（60秒内）。登录成功后浏览器将在后台运行。
 
 ### 2. 抓取题目
 
 ```bash
-node dist/index.js scrape --knowledge zsd27927 --limit 5
+node ./dist/index.js scrape --knowledge zsd27927 --limit 5
 ```
 
 ### 3. 关闭浏览器（用完后）
 
 ```bash
-node dist/index.js shutup
+node ./dist/index.js shutup
 ```
 
 ## 命令详解
@@ -74,7 +49,7 @@ node dist/index.js shutup
 启动浏览器并登录（阻塞模式）。
 
 ```bash
-node dist/index.js start [options]
+node ./dist/index.js start [options]
 ```
 
 选项：
@@ -82,21 +57,22 @@ node dist/index.js start [options]
 
 **工作流程：**
 1. 检查是否已有浏览器在运行
-2. 启动 Chromium 浏览器
+2. 启动 Chromium 浏览器（后台运行）
 3. 访问组卷网
-4. 检查登录状态，未登录则显示二维码等待扫码
-5. 登录成功后保存状态到 `storage-state.json`
-6. 保存浏览器状态到 `.browser-state.json`
-7. 退出命令，浏览器在后台继续运行
+4. 检查登录状态
+   - 已登录：直接继续
+   - 未登录：显示二维码等待扫码（60秒超时）
+5. 保存登录状态和浏览器状态
+6. 命令退出，浏览器在后台继续运行
 
-**提示：** 登录成功后可以直接运行 `scrape` 命令，无需重新启动浏览器。
+**提示：** 浏览器会保持运行，可以多次运行 `scrape` 命令。
 
 ### scrape 命令
 
 从已启动的浏览器抓取题目。
 
 ```bash
-node dist/index.js scrape --knowledge zsd27927 [options]
+node ./dist/index.js scrape --knowledge <id> [options]
 ```
 
 **重要：** 必须先运行 `start` 命令启动浏览器！
@@ -106,7 +82,7 @@ node dist/index.js scrape --knowledge zsd27927 [options]
 关闭后台运行的浏览器实例。
 
 ```bash
-node dist/index.js shutup
+node ./dist/index.js shutup
 ```
 
 ### config 命令
@@ -115,19 +91,19 @@ node dist/index.js shutup
 
 ```bash
 # 查看当前配置
-node dist/index.js config
+node ./dist/index.js config
 
 # 设置输出目录
-node dist/index.js config --output ./my-output
+node ./dist/index.js config --output ./my-output
 
 # 设置浏览器路径
-node dist/index.js config --browser-path "/usr/bin/google-chrome"
+node ./dist/index.js config --browser-path "/usr/bin/google-chrome"
 
 # 设置调试端口
-node dist/index.js config --browser-port 9222
+node ./dist/index.js config --browser-port 9222
 
 # 启用/禁用日志
-node dist/index.js config --log-enabled true
+node ./dist/index.js config --log-enabled true
 ```
 
 ### list 命令
@@ -136,16 +112,16 @@ node dist/index.js config --log-enabled true
 
 ```bash
 # 查看高中知识点树
-node dist/index.js list --tree
+node ./dist/index.js list --tree
 
 # 查看初中知识点树
-node dist/index.js list --tree --middle
+node ./dist/index.js list --tree --middle
 
 # 搜索知识点
-node dist/index.js list --search 函数
+node ./dist/index.js list --search 函数
 
 # 通过ID查找知识点
-node dist/index.js list --id zsd27927
+node ./dist/index.js list --id zsd27927
 ```
 
 ## 配置
@@ -156,9 +132,9 @@ node dist/index.js list --id zsd27927
 {
   "cookie": "",
   "outputDir": "./zujuan-output",
-  "browserPath": "/usr/bin/google-chrome",
+  "browserPath": null,
   "defaultGrade": "high",
-  "headless": false,
+  "headless": true,
   "qrCodePath": "./login-qrcode.png",
   "browserPort": 9222,
   "logEnabled": true,
@@ -169,9 +145,9 @@ node dist/index.js list --id zsd27927
 | 配置项 | 说明 | 默认值 |
 |--------|------|--------|
 | `outputDir` | 输出目录 | `./zujuan-output` |
-| `browserPath` | 浏览器可执行文件路径 | `/usr/bin/google-chrome` |
+| `browserPath` | 浏览器可执行文件路径 | `null`（自动查找） |
 | `defaultGrade` | 默认年级 | `high` |
-| `headless` | 无头模式 | `false` |
+| `headless` | 无头模式 | `true` |
 | `qrCodePath` | 二维码图片保存路径 | `./login-qrcode.png` |
 | `browserPort` | 浏览器调试端口 | `9222` |
 | `logEnabled` | 是否启用日志 | `true` |
@@ -216,10 +192,10 @@ node dist/index.js list --id zsd27927
 **示例：**
 ```bash
 # 2026年高三单选题，适中难度
-node dist/index.js scrape -k zsd27927 -t t1 -d d3 -y 2026 -l 10
+node ./dist/index.js scrape -k zsd27927 -t t1 -d d3 -y 2026 -l 10
 
 # 2025年高二多选题，较难
-node dist/index.js scrape -k zsd27927 -t t2 -d d4 -y 2025 -l 10
+node ./dist/index.js scrape -k zsd27927 -t t2 -d d4 -y 2025 -l 10
 ```
 
 ## 输出结果
@@ -259,7 +235,36 @@ JSON 结果格式：
 
 禁用日志：
 ```bash
-node dist/index.js config --log-enabled false
+node ./dist/index.js config --log-enabled false
+```
+
+## 工作流程
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      CLI 命令层                              │
+├──────────────┬─────────────────┬───────────────────────────┤
+│  start       │  scrape         │  shutup                    │
+│  (阻塞模式)  │  (连接模式)      │  (关闭浏览器)               │
+└──────┬───────┴────────┬────────┴────────┬────────────────────┘
+       │                │                 │
+       ▼                ▼                 ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    BrowserManager                            │
+│  ┌─────────────────┐    ┌────────────────────────────────┐ │
+│  │ launch()        │    │ connect()                      │ │
+│  │ (启动浏览器)     │    │ (连接到已运行浏览器)              │ │
+│  └─────────────────┘    └────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+       │                │                 │
+       ▼                ▼                 ▼
+┌─────────────────────────────────────────────────────────────┐
+│                       文件层                                 │
+│  ┌─────────────────┐    ┌────────────────────────────────┐ │
+│  │ .browser-state.json │  │ storage-state.json            │ │
+│  │ (浏览器状态)       │  │ (登录状态)                       │ │
+│  └─────────────────┘    └────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ## 云端部署
@@ -274,14 +279,14 @@ node dist/index.js config --log-enabled false
 
 如果调试端口被占用，可通过配置修改：
 ```bash
-node dist/index.js config --browser-port 9223
+node ./dist/index.js config --browser-port 9223
 ```
 
 ### 无头模式
 
-对于无 GUI 的服务器：
+默认使用无头模式，适合服务器环境：
 ```bash
-node dist/index.js config --headless true
+node ./dist/index.js config --headless true
 ```
 
 ## 常见问题
@@ -290,7 +295,7 @@ node dist/index.js config --headless true
 A: 需要先运行 `start` 命令启动浏览器。
 
 ### Q: 扫码登录超时怎么办？
-A: 确保30秒内完成扫码，如果网络较慢可以稍后重试。删除 `storage-state.json` 后重新运行 `start`。
+A: 确保60秒内完成扫码，如果网络较慢可以稍后重试。删除 `storage-state.json` 后重新运行 `start`。
 
 ### Q: 浏览器崩溃了怎么办？
 A: 运行 `start` 命令重新启动即可。
@@ -303,6 +308,12 @@ A: 可以，但只能抓取题目，无法获取答案解析。
 
 ### Q: 如何抓取多页？
 A: 使用 `--page` 参数指定页码。
+
+### Q: 浏览器启动失败？
+A: 检查：
+- 端口是否被占用：`lsof -i :9222`
+- 浏览器路径是否正确：`node ./dist/index.js config --browser-path "/path/to/chrome"`
+- 日志文件查看详细信息：`cat ./zujuan.log`
 
 ## 开发
 
