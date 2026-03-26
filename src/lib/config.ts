@@ -9,10 +9,13 @@ const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 const DEFAULT_CONFIG: Config = {
   cookie: '',
   outputDir: './zujuan-output',
-  browserPath: null,
+  browserPath: '/usr/bin/google-chrome',
   defaultGrade: 'high',
   headless: false,
   qrCodePath: './login-qrcode.png',
+  browserPort: 9222,
+  logEnabled: true,
+  logPath: './zujuan.log',
 };
 
 export class ConfigManager {
@@ -65,6 +68,15 @@ export class ConfigManager {
     }
     if (options.defaultGrade !== undefined) {
       this.config.defaultGrade = options.defaultGrade;
+    }
+    if (options.browserPort !== undefined) {
+      this.config.browserPort = options.browserPort;
+    }
+    if (options.logEnabled !== undefined) {
+      this.config.logEnabled = options.logEnabled;
+    }
+    if (options.logPath !== undefined) {
+      this.config.logPath = options.logPath;
     }
     this.saveConfig();
   }

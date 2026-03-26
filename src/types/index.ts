@@ -5,16 +5,22 @@ export interface ConfigOptions {
   browserPath?: string;
   qrCodePath?: string;
   defaultGrade?: 'high' | 'middle';
+  browserPort?: number;
+  logEnabled?: boolean;
+  logPath?: string;
 }
 
 // 配置文件结构
 export interface Config {
   cookie: string;
   outputDir: string;
-  browserPath: string | null;
+  browserPath: string;
   defaultGrade: 'high' | 'middle';
   headless: boolean;
   qrCodePath: string;
+  browserPort: number;
+  logEnabled: boolean;
+  logPath: string;
 }
 
 // 题目题型
@@ -66,4 +72,12 @@ export interface ScrapeResult {
   questionText: string;
   answerText: string;
   timestamp: string;
+}
+
+// 浏览器状态
+export interface BrowserState {
+  wsEndpoint: string;
+  pid: number;
+  port: number;
+  startedAt: string;
 }

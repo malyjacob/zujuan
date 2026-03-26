@@ -10,6 +10,8 @@ export class ScraperEngine {
   private page: Page | null = null;
 
   async initialize(): Promise<void> {
+    // 使用连接模式连接到已运行的浏览器
+    await browserManager.connect();
     this.page = await browserManager.getPage();
   }
 
@@ -52,7 +54,7 @@ export class ScraperEngine {
     const questions = await this.getQuestionSelectors();
 
     const results: ScrapeResult[] = [];
-    const outputDir = path.resolve(options.output || 'zujuan-output');
+    const outputDir = path.resolve(options.output || configManager.get('outputDir'));
 
     // 确保输出目录存在
     if (!fs.existsSync(outputDir)) {
@@ -133,6 +135,9 @@ export class ScraperEngine {
     const jsonPath = path.join(outputDir, `results_${Date.now()}.json`);
     fs.writeFileSync(jsonPath, JSON.stringify(results, null, 2), 'utf-8');
     console.log(`结果已保存到: ${jsonPath}`);
+
+    // 关闭连接（不关闭浏览器进程）
+    await browserManager.close();
 
     return results;
   }

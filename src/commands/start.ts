@@ -1,34 +1,41 @@
 import { Command } from 'commander';
 import { browserManager } from '../lib/browser';
-import { configManager } from '../lib/config';
+import { BrowserStateManager } from '../lib/browser';
 
 export function createStartCommand(): Command {
   const command = new Command('start');
 
   command
-    .description('启动浏览器并进入选题页面')
+    .description('启动浏览器并登录（阻塞模式，等待登录完成后退出，浏览器在后台运行）')
     .option('-g, --grade <grade>', '年级: 高中 或 初中', '高中')
     .action(async (options) => {
       const grade = options.grade as '高中' | '初中';
 
-      console.log(`正在启动浏览器，进入${grade}数学知识点选题页...`);
+      console.log(`正在启动浏览器（${grade}数学）...`);
+      console.log('提示：首次使用需要扫码登录，登录成功后浏览器将在后台运行');
 
       try {
+        // 检查是否已在运行
+        if (browserManager.isRunning()) {
+          const state = BrowserStateManager.load();
+          console.log(`\n浏览器已在后台运行 (PID: ${state?.pid})`);
+          console.log('可以直接使用 scrape 命令抓取题目');
+          return;
+        }
+
+        // 启动浏览器（阻塞模式，等待登录完成）
         await browserManager.launch();
 
-        const page = await browserManager.getPage();
+        console.log('\n========================================');
+        console.log('浏览器已在后台运行！');
+        console.log('可以使用以下命令：');
+        console.log('  scrape - 抓取题目');
+        console.log('  shutup  - 关闭浏览器');
+        console.log('========================================');
 
-        // 根据年级选择基础URL
-        const gradePrefix = grade === '高中' ? 'gzsx' : 'czsx';
-        const homeUrl = `https://zujuan.xkw.com/${gradePrefix}/`;
-
-        console.log(`正在导航到: ${homeUrl}`);
-        await page.goto(homeUrl, { waitUntil: 'networkidle' });
-
-        console.log('浏览器已启动并进入选题页面');
-        console.log('请在浏览器中进行操作，完成后使用 shutup 命令关闭浏览器');
       } catch (error) {
-        console.error('启动浏览器失败:', error);
+        console.error('\n启动浏览器失败:', error);
+        process.exit(1);
       }
     });
 

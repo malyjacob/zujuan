@@ -9,6 +9,8 @@ storage-state.json
 cookie.txt
 login-qrcode.png
 zujuan-output/
+.browser-state.json
+zujuan.log
 
 # OS files
 .DS_Store
