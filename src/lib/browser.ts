@@ -167,6 +167,9 @@ export class BrowserManager {
       await this.page.goto('https://zujuan.xkw.com', { waitUntil: 'domcontentloaded' });
       await this.page.waitForTimeout(2000);
 
+      // 移除页面覆盖层元素（如引导面板）
+      await this.removeOverlay();
+
       // 检查登录状态
       const isLoggedIn = await this.checkLoginStatus();
 
@@ -239,6 +242,33 @@ export class BrowserManager {
     } catch (error) {
       writeLog(`获取浏览器 PID 失败: ${error}`, 'WARN');
       return null;
+    }
+  }
+
+  // 移除页面覆盖层元素（如引导面板）
+  private async removeOverlay(): Promise<void> {
+    try {
+      const overlaySelector = 'div.ai-search-guide-panel';
+      const overlay = await this.page!.$(overlaySelector);
+
+      if (overlay) {
+        writeLog(`检测到覆盖层元素 ${overlaySelector}，正在移除...`);
+        // 隐藏或删除该元素
+        await this.page!.evaluate((sel) => {
+          const el = document.querySelector(sel) as HTMLElement | null;
+          if (el) {
+            el.style.display = 'none';
+            // 或者使用 remove() 完全删除
+            // el.remove();
+          }
+        }, overlaySelector);
+        console.log('已移除页面覆盖层');
+        writeLog('覆盖层元素已移除');
+        // 等待一小段时间让页面稳定
+        await this.page!.waitForTimeout(500);
+      }
+    } catch (error) {
+      writeLog(`移除覆盖层失败: ${error}`, 'WARN');
     }
   }
 
