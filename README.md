@@ -96,7 +96,7 @@ node ./dist/index.js scrape -k <knowledge_id> [options]
 |------|------|--------|
 | `-t, --type <type>` | 题型，详见下方题型说明 | 全部题型 |
 | `-d, --difficulty <level>` | 难度，详见下方难度说明 | 全部难度 |
-| `-y, --year <year>` | 年份（2023/2024/2025/2026） | 全部年份 |
+| `-y, --year <year>` | 年份（2026/2025/2024/2023/-1，-1表示更早） | 全部年份 |
 | `-g, --grade <grade>` | 年级：`high`=高中 `middle`=初中 | 配置中的 `defaultGrade` |
 | `-r, --order <order>` | 排序：`latest`=`hot`=`comprehensive` | 配置中的 `defaultOrder` |
 | `-l, --limit <number>` | 最大抓取数量（1-10） | `10` |
@@ -347,7 +347,7 @@ zujuan-output/
 ]
 ```
 
-> `options` 字段记录本次抓取所使用的筛选条件（仅包含命令行指定的选项），全部使用中文名称。无可用选项时该字段不出现。
+> `options` 字段记录本次抓取所使用的筛选条件，`grade`（高中/初中）和 `order`（最新/最热/综合）始终存在，其余字段仅在命令行指定时出现。`year` 为 `-1` 时表示指定了"更早年份"选项。
 
 ---
 

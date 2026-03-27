@@ -38,7 +38,7 @@ export type QuestionType = 't1' | 't2' | 't3' | 't4' | 't5' | 't6';
 export type Difficulty = 'd1' | 'd2' | 'd3' | 'd4' | 'd5';
 
 // 年份
-export type Year = 2023 | 2024 | 2025 | 2026;
+export type Year = 2023 | 2024 | 2025 | 2026 | -1;
 
 // 年级: high=高中, middle=初中
 export type Grade = 'high' | 'middle';
@@ -79,11 +79,11 @@ export interface ScrapeOptions {
 
 // 抓取结果
 export interface ScrapeMeta {
-  grade?: string;        // 年级段：高中/初中
+  grade: string;          // 年级段：高中/初中（必填）
   type?: string;         // 题型：单选题/多选题/填空题/解答题
   difficulty?: string;   // 难度：容易/较易/适中/较难/困难
-  year?: number;         // 年份
-  order?: string;        // 排序方式：最新/最热/综合
+  year?: number;         // 年份（含 -1 表示更早年份）
+  order: string;         // 排序方式：最新/最热/综合（必填）
   multiCount?: number;   // 多选题答案数量
   fillCount?: number;    // 填空题空数
   page?: number;         // 分页页码

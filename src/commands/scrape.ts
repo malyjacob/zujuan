@@ -20,7 +20,7 @@ export function createScrapeCommand(): Command {
     .requiredOption('-k, --knowledge <id>', '知识点节点ID（必填）')
     .option('-t, --type <type>', '题型: t1=单选 t2=多选 t3=填空 t4=解答 t5=判断 t6=概念填空')
     .option('-d, --difficulty <level>', '难度: d1=容易 d2=较易 d3=适中 d4=较难 d5=困难')
-    .option('-y, --year <year>', '年份: 2026/2025/2024/2023')
+    .option('-y, --year <year>', '年份: 2026/2025/2024/2023/-1（-1表示更早）')
     .option('-g, --grade <grade>', '年级: high=高中 middle=初中（默认使用配置中的defaultGrade）')
     .option('-r, --order <order>', '排序: latest=最新 hot=最热 comprehensive=综合（默认使用配置中的defaultOrder）')
     .option('-l, --limit <number>', '最大抓取截图数量（1-10，默认10）', '10')
