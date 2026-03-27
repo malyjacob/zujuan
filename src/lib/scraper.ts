@@ -4,7 +4,6 @@ import * as path from 'path';
 import * as https from 'https';
 import * as http from 'http';
 import { browserManager } from './browser';
-import { ocrProcessor } from './ocr';
 import { ScrapeResult, ScrapeOptions } from '../types';
 import { configManager } from './config';
 
@@ -137,30 +136,13 @@ export class ScraperEngine {
         .map(t => this.downloadImage(t.answerSrc!, t.answerPath))
     );
 
-    // 第三步：OCR 识别并构建结果
-    const results: ScrapeResult[] = await Promise.all(
-      tasks.map(async (t) => {
-        const questionText = await ocrProcessor.screenshotToTextFromBuffer(
-          fs.readFileSync(t.questionPath)
-        );
-
-        let answerText = '';
-        if (fs.existsSync(t.answerPath)) {
-          answerText = await ocrProcessor.screenshotToTextFromBuffer(
-            fs.readFileSync(t.answerPath)
-          );
-        }
-
-        return {
-          id: t.id,
-          questionPath: t.questionPath,
-          answerPath: fs.existsSync(t.answerPath) ? t.answerPath : '',
-          questionText,
-          answerText,
-          timestamp: new Date().toISOString(),
-        };
-      })
-    );
+    // 第三步：构建结果
+    const results: ScrapeResult[] = tasks.map((t) => ({
+      id: t.id,
+      questionPath: t.questionPath,
+      answerPath: fs.existsSync(t.answerPath) ? t.answerPath : '',
+      timestamp: new Date().toISOString(),
+    }));
 
     const jsonPath = path.join(outputDir, `results_${Date.now()}.json`);
     fs.writeFileSync(jsonPath, JSON.stringify(results, null, 2), 'utf-8');

@@ -76,8 +76,6 @@ export interface ScrapeResult {
   id: string;
   questionPath: string;
   answerPath: string;
-  questionText: string;
-  answerText: string;
   timestamp: string;
 }
 
