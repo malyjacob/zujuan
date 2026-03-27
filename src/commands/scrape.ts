@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { scraperEngine } from '../lib/scraper';
 import { configManager } from '../lib/config';
+import { logger } from '../lib/logger';
 import {
   ScrapeOptions,
   QuestionType,
@@ -8,6 +9,7 @@ import {
   Year,
   Grade,
   Order,
+  LogLevel,
 } from '../types';
 
 export function createScrapeCommand(): Command {
@@ -26,6 +28,7 @@ export function createScrapeCommand(): Command {
     .option('-mc, --multi-count <number>', '多选题答案数量: 2, 3, 4及以上')
     .option('-fc, --fill-count <number>', '填空题空数: 1, 2, 3及以上')
     .option('-p, --page <number>', '分页页码（默认1，第二页起为o2p2格式）')
+    .option('-ll, --log-level <level>', '日志级别: quiet=纯净 normal=普通 verbose=详细（默认: quiet）')
     .action(async (options) => {
       const limit = Math.min(10, Math.max(1, parseInt(options.limit) || 10));
       // 年级：命令行指定优先，否则使用配置默认值
@@ -45,26 +48,30 @@ export function createScrapeCommand(): Command {
         multiCount: options.multiCount ? parseInt(options.multiCount) : undefined,
         fillCount: options.fillCount ? parseInt(options.fillCount) : undefined,
         page: options.page ? parseInt(options.page) : undefined,
+        logLevel: (options.logLevel || configManager.get('defaultLogLevel')) as LogLevel,
       };
 
       const gradeName = grade === 'high' ? '高中' : '初中';
       const orderName = { latest: '最新', hot: '最热', comprehensive: '综合' }[order];
 
-      console.log('开始抓取题目...');
-      console.log(`知识点: ${scrapeOptions.knowledge}`);
-      console.log(`年级: ${gradeName}`);
-      console.log(`排序: ${orderName}`);
-      if (scrapeOptions.type) console.log(`题型: ${scrapeOptions.type}`);
-      if (scrapeOptions.difficulty) console.log(`难度: ${scrapeOptions.difficulty}`);
-      if (scrapeOptions.year) console.log(`年份: ${scrapeOptions.year}`);
-      if (scrapeOptions.page) console.log(`分页: ${scrapeOptions.page}`);
-      console.log(`限制数量: ${scrapeOptions.limit}`);
+      const logLevel = scrapeOptions.logLevel || 'quiet';
+      logger.setLevel(logLevel);
+
+      logger.log('normal', '开始抓取题目...');
+      logger.log('normal', `知识点: ${scrapeOptions.knowledge}`);
+      logger.log('normal', `年级: ${gradeName}`);
+      logger.log('normal', `排序: ${orderName}`);
+      if (scrapeOptions.type) logger.log('normal', `题型: ${scrapeOptions.type}`);
+      if (scrapeOptions.difficulty) logger.log('normal', `难度: ${scrapeOptions.difficulty}`);
+      if (scrapeOptions.year) logger.log('normal', `年份: ${scrapeOptions.year}`);
+      if (scrapeOptions.page) logger.log('normal', `分页: ${scrapeOptions.page}`);
+      logger.log('normal', `限制数量: ${scrapeOptions.limit}`);
 
       try {
         const results = await scraperEngine.scrape(scrapeOptions);
-        console.log(`抓取完成，共 ${results.length} 道题目`);
+        logger.log('normal', `抓取完成，共 ${results.length} 道题目`);
       } catch (error) {
-        console.error('抓取失败:', error);
+        logger.error('抓取失败:', error);
       }
     });
 

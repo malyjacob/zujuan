@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { Config, ConfigOptions } from '../types';
+import { Config, ConfigOptions, LogLevel } from '../types';
 
 const CONFIG_DIR = path.join(os.homedir(), '.zujuan-scraper');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
@@ -17,6 +17,7 @@ const DEFAULT_CONFIG: Config = {
   browserPort: 9222,
   logEnabled: true,
   logPath: './zujuan.log',
+  defaultLogLevel: 'quiet',
 };
 
 export class ConfigManager {
@@ -84,6 +85,9 @@ export class ConfigManager {
     }
     if (options.logPath !== undefined) {
       this.config.logPath = options.logPath;
+    }
+    if (options.defaultLogLevel !== undefined) {
+      this.config.defaultLogLevel = options.defaultLogLevel;
     }
     this.saveConfig();
   }

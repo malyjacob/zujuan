@@ -10,6 +10,7 @@ export interface ConfigOptions {
   headless?: boolean;
   logEnabled?: boolean;
   logPath?: string;
+  defaultLogLevel?: LogLevel;
 }
 
 // 配置文件结构
@@ -24,7 +25,11 @@ export interface Config {
   browserPort: number;
   logEnabled: boolean;
   logPath: string;
+  defaultLogLevel: LogLevel;
 }
+
+// 日志级别
+export type LogLevel = 'quiet' | 'normal' | 'verbose';
 
 // 题目题型
 export type QuestionType = 't1' | 't2' | 't3' | 't4' | 't5' | 't6';
@@ -69,6 +74,7 @@ export interface ScrapeOptions {
   multiCount?: number; // 多选题答案数: 2, 3, 4+
   fillCount?: number; // 填空题空数: 1, 2, 3+
   page?: number; // 分页页码
+  logLevel?: LogLevel; // 日志级别，覆盖配置默认值
 }
 
 // 抓取结果

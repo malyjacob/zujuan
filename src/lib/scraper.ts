@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as https from 'https';
 import * as http from 'http';
 import { browserManager } from './browser';
+import { logger } from './logger';
 import { ScrapeResult, ScrapeOptions } from '../types';
 import { configManager } from './config';
 
@@ -25,6 +26,7 @@ export class ScraperEngine {
   }
 
   async scrape(options: ScrapeOptions): Promise<ScrapeResult[]> {
+    logger.setLevel(options.logLevel || 'quiet');
     await this.initialize();
 
     const {
@@ -50,7 +52,7 @@ export class ScraperEngine {
       defaultOrder
     );
 
-    console.log(`正在访问: ${url}`);
+    logger.log('quiet', `正在访问: ${url}`);
     await this.page!.setViewportSize({ width: 1920, height: 1080 });
     await this.page!.goto(url, { waitUntil: 'domcontentloaded' });
     await this.page!.waitForTimeout(3000);
@@ -63,7 +65,7 @@ export class ScraperEngine {
       fs.mkdirSync(outputDir, { recursive: true });
     }
 
-    console.log(`页面标题: ${await this.page!.title()}`);
+    logger.log('verbose', `页面标题: ${await this.page!.title()}`);
 
     const questionHandles = await this.page!.$$('div.tk-quest-item.quesroot');
     const totalQuestions = questionHandles.length;
@@ -72,13 +74,13 @@ export class ScraperEngine {
     if (totalQuestions === 0) {
       const htmlPath = path.join(outputDir, `page_debug_${Date.now()}.html`);
       fs.writeFileSync(htmlPath, await this.page!.content(), 'utf-8');
-      console.log(`页面已保存到: ${htmlPath}`);
-      console.log(`未找到任何题目，请检查页面结构`);
+      logger.log('normal', `页面已保存到: ${htmlPath}`);
+      logger.log('normal', `未找到任何题目，请检查页面结构`);
       await browserManager.close();
       return [];
     }
 
-    console.log(`共找到 ${totalQuestions} 个题目，准备抓取 ${count} 道`);
+    logger.log('normal', `共找到 ${totalQuestions} 个题目，准备抓取 ${count} 道`);
 
     // 第一步：逐题截图并收集答案 URL
     const tasks: QuestionTask[] = [];
@@ -109,16 +111,16 @@ export class ScraperEngine {
           for (let j = 0; j < imagesSrc.length; j++) {
             imagesPaths.push(path.join(outputDir, `${taskId}_img_${j}.png`));
           }
-          console.log(`第 ${i + 1}/${count}: 检测到 ${imagesSrc.length} 张示例图，已隐藏`);
+          logger.log('verbose', `第 ${i + 1}/${count}: 检测到 ${imagesSrc.length} 张示例图，已隐藏`);
         }
 
         const cntHandle = await handle.$('div.exam-item__cnt');
         if (!cntHandle) {
-          console.log(`第 ${i + 1} 题：找不到题目内容区，跳过`);
+          logger.log('normal', `第 ${i + 1} 题：找不到题目内容区，跳过`);
           continue;
         }
         await cntHandle.screenshot({ path: questionPath });
-        console.log(`第 ${i + 1}/${count}: 题目截图完成`);
+        logger.log('verbose', `第 ${i + 1}/${count}: 题目截图完成`);
 
         const wrapperHandle = await handle.$('div.wrapper.quesdiv');
         if (wrapperHandle) {
@@ -138,20 +140,20 @@ export class ScraperEngine {
         tasks.push({ id: taskId, questionPath, answerSrc, answerPath, imagesSrc, imagesPaths });
 
         if (answerSrc) {
-          console.log(`第 ${i + 1}/${count}: 答案 URL 已收集`);
+          logger.log('verbose', `第 ${i + 1}/${count}: 答案 URL 已收集`);
         } else {
-          console.log(`第 ${i + 1}/${count}: 未找到答案图片`);
+          logger.log('normal', `第 ${i + 1}/${count}: 未找到答案图片`);
         }
 
       } catch (error) {
-        console.error(`第 ${i + 1} 题抓取失败:`, error);
+        logger.error(`第 ${i + 1} 题抓取失败:`, error);
         await this.page!.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
         await this.page!.waitForTimeout(500);
       }
     }
 
     // 第二步：并行下载所有答案图片
-    console.log('开始并行下载答案图片...');
+    logger.log('verbose', '开始并行下载答案图片...');
     await Promise.all(
       tasks
         .filter(t => t.answerSrc)
@@ -159,7 +161,7 @@ export class ScraperEngine {
     );
 
     // 第三步：并行下载所有示例图
-    console.log('开始并行下载示例图...');
+    logger.log('verbose', '开始并行下载示例图...');
     const imageDownloadPromises: Promise<void>[] = [];
     for (const t of tasks) {
       for (let j = 0; j < t.imagesSrc.length; j++) {
@@ -179,7 +181,7 @@ export class ScraperEngine {
 
     const jsonPath = path.join(outputDir, `results_${Date.now()}.json`);
     fs.writeFileSync(jsonPath, JSON.stringify(results, null, 2), 'utf-8');
-    console.log(`结果已保存到: ${jsonPath}`);
+    logger.log('quiet', `结果已保存到: ${jsonPath}`);
 
     await browserManager.close();
     process.exit(0);

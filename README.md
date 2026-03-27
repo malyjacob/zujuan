@@ -104,6 +104,17 @@ node ./dist/index.js scrape -k <knowledge_id> [options]
 | `-fc, --fill-count <number>` | 填空题空数（1/2/3+） | 不限制 |
 | `-p, --page <number>` | 分页页码（第2页起为 `o2p2` 格式） | `1` |
 | `-o, --output <path>` | 输出目录 | 配置中的 `outputDir` |
+| `-ll, --log-level <level>` | 日志级别：`quiet`=`normal`=`verbose` | `quiet`（默认） |
+
+**日志级别说明（`-ll`）：**
+
+| 值 | 说明 | 典型输出 |
+|----|------|---------|
+| `quiet` | 纯净，仅输出目标 URL 和最终结果路径 | 仅 2 行 |
+| `normal` | 普通，包含抓取进度、错误警告和最终路径 | 日常使用推荐 |
+| `verbose` | 详细，包含每题处理步骤、下载进度等调试信息 | 调试用 |
+
+> 覆盖配置中的 `defaultLogLevel`，每次抓取可单独指定。
 
 **题型筛选（`-t`）：**
 
@@ -193,6 +204,7 @@ node ./dist/index.js config [options]
 | `-h, --headless <enabled>` | 设置无头模式：`true`/`false` | `true` |
 | `-l, --log-enabled <enabled>` | 设置是否启用日志：`true`/`false` | `true` |
 | `--log-path <path>` | 设置日志文件路径 | `./zujuan.log` |
+| `-ll, --log-level <level>` | 设置默认日志级别：`quiet`/`normal`/`verbose` | `quiet` |
 
 **示例：**
 
@@ -220,6 +232,12 @@ node ./dist/index.js config -p 9223
 
 # 关闭日志
 node ./dist/index.js config --log-enabled false
+
+# 设置默认日志级别为普通（日常使用）
+node ./dist/index.js config -ll normal
+
+# 设置默认日志级别为详细（调试用）
+node ./dist/index.js config -ll verbose
 ```
 
 ---
@@ -282,6 +300,7 @@ node ./dist/index.js list --path zsd28279
 | `browserPort` | `number` | Chrome 远程调试端口 | `9222` |
 | `logEnabled` | `boolean` | 是否启用日志记录 | `true` |
 | `logPath` | `string` | 日志文件保存路径 | `"./zujuan.log"` |
+| `defaultLogLevel` | `"quiet" \| "normal" \| "verbose"` | scrape 命令默认日志级别，可被 `-ll` 参数覆盖 | `"quiet"` |
 
 ---
 

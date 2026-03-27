@@ -23,11 +23,13 @@ export function createConfigCommand(): Command {
     .option('-h, --headless <enabled>', '设置无头模式: true/false（默认: true）')
     .option('-l, --log-enabled <enabled>', '是否启用日志（true/false）')
     .option('--log-path <path>', '设置日志文件路径（默认: ./zujuan.log）')
+    .option('-ll, --log-level <level>', '设置默认日志级别: quiet=纯净 normal=普通 verbose=详细')
     .action((options) => {
       if (options.cookie || options.output || options.browserPath ||
           options.qrCodePath || options.defaultGrade || options.defaultOrder ||
           options.browserPort || options.headless !== undefined ||
-          options.logEnabled !== undefined || options.logPath) {
+          options.logEnabled !== undefined || options.logPath ||
+          options.logLevel) {
 
         configManager.set({
           cookie: options.cookie,
@@ -40,6 +42,7 @@ export function createConfigCommand(): Command {
           headless: options.headless !== undefined ? options.headless === 'true' : undefined,
           logEnabled: options.logEnabled !== undefined ? options.logEnabled === 'true' : undefined,
           logPath: options.logPath,
+          defaultLogLevel: options.logLevel as 'quiet' | 'normal' | 'verbose' | undefined,
         });
         console.log('配置已更新');
       } else {
