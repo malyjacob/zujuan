@@ -12,6 +12,8 @@ interface QuestionTask {
   questionPath: string;
   answerSrc: string | null;
   answerPath: string;
+  imagesSrc: string[];
+  imagesPaths: string[];
 }
 
 export class ScraperEngine {
@@ -90,6 +92,26 @@ export class ScraperEngine {
       try {
         await handle.evaluate(el => el.scrollIntoView({ behavior: 'instant', block: 'start' }));
 
+        // 收集示例图 URL 并隐藏，不占位
+        const imagesSrc: string[] = [];
+        const imagesPaths: string[] = [];
+        await handle.evaluate((el, _imagesSrc: string[]) => {
+          const imgs = el.querySelectorAll('div.exam-item__cnt > p img');
+          imgs.forEach((img) => {
+            const src = (img as HTMLImageElement).src;
+            if (src) {
+              _imagesSrc.push(src);
+              (img as HTMLImageElement).setAttribute('hidden', '');
+            }
+          });
+        }, imagesSrc);
+        if (imagesSrc.length > 0) {
+          for (let j = 0; j < imagesSrc.length; j++) {
+            imagesPaths.push(path.join(outputDir, `${taskId}_img_${j}.png`));
+          }
+          console.log(`第 ${i + 1}/${count}: 检测到 ${imagesSrc.length} 张示例图，已隐藏`);
+        }
+
         const cntHandle = await handle.$('div.exam-item__cnt');
         if (!cntHandle) {
           console.log(`第 ${i + 1} 题：找不到题目内容区，跳过`);
@@ -113,7 +135,7 @@ export class ScraperEngine {
           if (answerSrc) break;
         }
 
-        tasks.push({ id: taskId, questionPath, answerSrc, answerPath });
+        tasks.push({ id: taskId, questionPath, answerSrc, answerPath, imagesSrc, imagesPaths });
 
         if (answerSrc) {
           console.log(`第 ${i + 1}/${count}: 答案 URL 已收集`);
@@ -136,11 +158,22 @@ export class ScraperEngine {
         .map(t => this.downloadImage(t.answerSrc!, t.answerPath))
     );
 
-    // 第三步：构建结果
+    // 第三步：并行下载所有示例图
+    console.log('开始并行下载示例图...');
+    const imageDownloadPromises: Promise<void>[] = [];
+    for (const t of tasks) {
+      for (let j = 0; j < t.imagesSrc.length; j++) {
+        imageDownloadPromises.push(this.downloadImage(t.imagesSrc[j], t.imagesPaths[j]));
+      }
+    }
+    await Promise.all(imageDownloadPromises);
+
+    // 第四步：构建结果
     const results: ScrapeResult[] = tasks.map((t) => ({
       id: t.id,
       questionPath: t.questionPath,
       answerPath: fs.existsSync(t.answerPath) ? t.answerPath : '',
+      images: t.imagesPaths.filter(p => fs.existsSync(p)),
       timestamp: new Date().toISOString(),
     }));
 
