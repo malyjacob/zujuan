@@ -7,6 +7,7 @@ import { browserManager } from './browser';
 import { logger } from './logger';
 import { ScrapeResult, ScrapeOptions, ScrapeMeta } from '../types';
 import { configManager } from './config';
+import { findNodeById, loadKnowledgeTree } from './knowledge-tree';
 
 interface QuestionTask {
   id: string;
@@ -171,8 +172,15 @@ export class ScraperEngine {
     await Promise.all(imageDownloadPromises);
 
     // 第四步：构建结果
+    const gradeLabel = grade === 'high' ? '高中' : '初中';
+    const tree = loadKnowledgeTree(gradeLabel);
+    const node = findNodeById(tree, knowledge);
+    const knowledgePoint = node?.name || knowledge;
+
     const meta: ScrapeMeta = {
-      grade: grade === 'high' ? '高中' : '初中',
+      knowledgeId: knowledge,
+      knowledgePoint,
+      grade: gradeLabel,
       order: (order ? { latest: '最新', hot: '最热', comprehensive: '综合' }[order] : '最新') as string,
     };
     if (type) {

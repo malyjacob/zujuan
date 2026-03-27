@@ -334,6 +334,8 @@ zujuan-output/
     ],
     "timestamp": "2026-03-27T10:30:00.000Z",
     "options": {
+      "knowledgeId": "zsd28279",
+      "knowledgePoint": "函数的基本概念",
       "grade": "高中",
       "type": "单选题",
       "difficulty": "较难",

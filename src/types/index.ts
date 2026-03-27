@@ -79,6 +79,8 @@ export interface ScrapeOptions {
 
 // 抓取结果
 export interface ScrapeMeta {
+  knowledgeId: string;    // 知识点节点ID
+  knowledgePoint: string;  // 知识点名称
   grade: string;          // 年级段：高中/初中（必填）
   type?: string;         // 题型：单选题/多选题/填空题/解答题
   difficulty?: string;   // 难度：容易/较易/适中/较难/困难
