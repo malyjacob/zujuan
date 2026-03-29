@@ -190,10 +190,19 @@ export function getDescendants(
   searchTerm?: string,
   grade: 'high' | 'middle' = 'high'
 ): NodeWithLevel[] {
-  if (maxDepth === 0) return [];
-
   const database = getDb();
   const results: NodeWithLevel[] = [];
+
+  // 首先查询根节点自身（level=0）
+  const rootNode = database
+    .prepare('SELECT * FROM knowledge_nodes WHERE id = ? AND grade = ?')
+    .get(nodeId, grade) as KnowledgeNodeRow | undefined;
+
+  if (rootNode) {
+    results.push({ node: rootNode, level: 0 });
+  }
+
+  if (maxDepth === 0) return results;
 
   // 用 parent_id 链式查询：每一层收集子节点的 id，作为下一层的 parent 条件
   let parentIds: string[] = [nodeId];
@@ -346,10 +355,15 @@ export function printNodesWithLevels(nodesWithLevels: NodeWithLevel[]): void {
 /**
  * 按树结构递归打印（仅限无搜索词场景）。
  * 将平铺的 BFS 结果重建为树，保持父→子→孙 的层级缩进和原始同层顺序。
- * @param nodesWithLevels  由 getDescendantsFromRoots / getDescendants 返回的扁平结果
+ * @param nodesWithLevels 由 getDescendantsFromRoots / getDescendants 返回的扁平结果
  * @param maxDisplayLevel 最大打印深度（-1=不限）
+ * @param rootId 可选：从指定节点开始打印（用于 --id 场景，忽略其他根节点）
  */
-export function printTree(nodesWithLevels: NodeWithLevel[], maxDisplayLevel: number = -1): void {
+export function printTree(
+  nodesWithLevels: NodeWithLevel[],
+  maxDisplayLevel: number = -1,
+  rootId?: string
+): void {
   // 第一遍：建立 parent_id → children[] 的映射（children 按 pos 排序）
   const childrenMap = new Map<string | null, KnowledgeNodeRow[]>();
 
@@ -364,9 +378,6 @@ export function printTree(nodesWithLevels: NodeWithLevel[], maxDisplayLevel: num
     siblings.sort((a, b) => a.pos - b.pos);
   }
 
-  // 第二遍：递归打印，depth 从 1 开始（根=1）
-  const roots = childrenMap.get(null) ?? [];
-
   function printChildren(parentId: string | null, depth: number): void {
     const children = childrenMap.get(parentId) ?? [];
     for (const child of children) {
@@ -376,8 +387,15 @@ export function printTree(nodesWithLevels: NodeWithLevel[], maxDisplayLevel: num
     }
   }
 
-  for (const root of roots) {
-    console.log(`${'  '.repeat(0)}• ${root.name} (${root.id})`);
-    printChildren(root.id, 2);
+  if (rootId) {
+    // --id 场景：只打印以 rootId 为根的子树（depth=1 缩进）
+    printChildren(rootId, 1);
+  } else {
+    // --tree / --depth 场景：打印所有根节点及其子树
+    const roots = childrenMap.get(null) ?? [];
+    for (const root of roots) {
+      console.log(`• ${root.name} (${root.id})`);
+      printChildren(root.id, 2);
+    }
   }
 }

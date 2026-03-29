@@ -78,7 +78,9 @@ export function createListCommand(): Command {
 
         const descendants = getDescendants(targetId, depth, options.search || undefined, grade);
 
-        if (descendants.length === 0) {
+        // 去掉 level=0 的根节点，剩下的是真正的子孙
+        const childCount = descendants.filter((d) => d.level > 0).length;
+        if (childCount === 0) {
           if (options.search) {
             console.log(`在深度 ${depth === -1 ? '不限' : depth} 内未找到包含"${options.search}"的子孙节点`);
           } else {
@@ -87,8 +89,8 @@ export function createListCommand(): Command {
           return;
         }
 
-        console.log(`\n子孙节点 (${descendants.length}个, 深度${depth === -1 ? '不限' : `≤${depth}`}):`);
-        printTree(descendants, depth);
+        console.log(`\n子孙节点 (${childCount}个, 深度${depth === -1 ? '不限' : `≤${depth}`}):`);
+        printTree(descendants, depth, targetId);
         return;
       }
 
