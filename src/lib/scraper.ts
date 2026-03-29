@@ -49,7 +49,7 @@ export class ScraperEngine {
     } = options;
 
     const { UrlBuilder } = await import('./url-builder');
-    const defaultOrder = order || configManager.get('defaultOrder');
+    const defaultOrder = order || configManager.get('order');
 
     const url = UrlBuilder.buildUrl(
       knowledge,
@@ -89,7 +89,7 @@ export class ScraperEngine {
 
     await this.scrollToLoadQuestions();
 
-    const outputDir = path.resolve(options.output || configManager.get('outputDir'));
+    const outputDir = path.resolve('./zujuan-output');
 
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
@@ -172,11 +172,11 @@ export class ScraperEngine {
             const infoCntSpans = leftMsg.querySelectorAll('span.addi-info > span.info-cnt');
             infoCntSpans.forEach((span) => {
               const text = span.textContent?.trim() || '';
-              // 第一条：题型
-              if (text.includes('题型') || text.includes('题类')) {
+              // 题型格式：包含"题型:"/"题类:"前缀，或直接是"填空题"/"解答题-问道题"等（共同点：含"题"字且无括号难度格式）
+              if (text.includes('题型') || text.includes('题类') || (text.includes('题') && !text.includes('('))) {
                 (window as any).__extra_qtype = text.split(':')[1]?.trim() || text;
               } else {
-                // 第二条：难度(得分率)
+                // 难度(得分率)格式：文字(数字)，如"适中(0.68)"
                 const match = text.match(/^(.+?)\(([0-9.]+)\)$/);
                 if (match) {
                   (window as any).__extra_diff = match[1].trim();

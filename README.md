@@ -20,12 +20,14 @@ npm install
 npm run build
 ```
 
+> `npm install` 会自动将知识点树文件复制到 `~/.zujuan-scraper/` 目录。
+
 ## 快速开始
 
 ### 1. 启动浏览器并登录
 
 ```bash
-node ./dist/index.js start
+zujuan start
 ```
 
 首次使用会弹出二维码，用手机微信扫码登录（60秒内）。登录成功后浏览器在后台运行。
@@ -33,13 +35,13 @@ node ./dist/index.js start
 ### 2. 抓取题目
 
 ```bash
-node ./dist/index.js scrape -k zsd28279 -l 5
+zujuan scrape -k zsd28279 -l 5
 ```
 
 ### 3. 关闭浏览器
 
 ```bash
-node ./dist/index.js shutup
+zujuan shutup
 ```
 
 ---
@@ -51,7 +53,7 @@ node ./dist/index.js shutup
 启动浏览器并完成登录（阻塞模式，登录成功后自动退出）。
 
 ```bash
-node ./dist/index.js start [options]
+zujuan start [options]
 ```
 
 **选项：**
@@ -79,7 +81,7 @@ node ./dist/index.js start [options]
 从已启动的浏览器抓取题目。
 
 ```bash
-node ./dist/index.js scrape -k <knowledge_id> [options]
+zujuan scrape -k <knowledge_id> [options]
 ```
 
 > **前提条件**：必须先运行 `start` 命令启动浏览器。
@@ -97,13 +99,12 @@ node ./dist/index.js scrape -k <knowledge_id> [options]
 | `-t, --type <type>` | 题型，详见下方题型说明 | 全部题型 |
 | `-d, --difficulty <level>` | 难度，详见下方难度说明 | 全部难度 |
 | `-y, --year <year>` | 年份（2026/2025/2024/2023/-1，-1表示更早） | 全部年份 |
-| `-g, --grade <grade>` | 年级：`high`=高中 `middle`=初中 | 配置中的 `defaultGrade` |
-| `-r, --order <order>` | 排序：`latest`=`hot`=`comprehensive` | 配置中的 `defaultOrder` |
+| `-g, --grade <grade>` | 年级：`high`=高中 `middle`=初中 | 配置中的 `grade` |
+| `-r, --order <order>` | 排序：`latest`=`hot`=`comprehensive` | 配置中的 `order` |
 | `-l, --limit <number>` | 最大抓取数量（1-10） | `10` |
 | `-mc, --multi-count <number>` | 多选题答案数量（2/3/4+） | 不限制 |
 | `-fc, --fill-count <number>` | 填空题空数（1/2/3+） | 不限制 |
 | `-p, --page <number>` | 分页页码（第2页起为 `o2p2` 格式） | `1` |
-| `-o, --output <path>` | 输出目录 | 配置中的 `outputDir` |
 | `-ll, --log-level <level>` | 日志级别：`quiet`=`normal`=`verbose` | `quiet`（默认） |
 
 **日志级别说明（`-ll`）：**
@@ -114,7 +115,7 @@ node ./dist/index.js scrape -k <knowledge_id> [options]
 | `normal` | 普通，包含抓取进度、错误警告和最终路径 | 日常使用推荐 |
 | `verbose` | 详细，包含每题处理步骤、下载进度等调试信息 | 调试用 |
 
-> 覆盖配置中的 `defaultLogLevel`，每次抓取可单独指定。
+> 覆盖配置中的 `logLevel`，每次抓取可单独指定。
 
 **题型筛选（`-t`）：**
 
@@ -149,19 +150,19 @@ node ./dist/index.js scrape -k <knowledge_id> [options]
 
 ```bash
 # 抓取高中单选题，最多5道
-node ./dist/index.js scrape -k zsd28279 -t t1 -l 5
+zujuan scrape -k zsd28279 -t t1 -l 5
 
 # 抓取初中较难解答题，按最热排序
-node ./dist/index.js scrape -k zsd5391 -g middle -t t4 -d d4 -r hot -l 3
+zujuan scrape -k zsd5391 -g middle -t t4 -d d4 -r hot -l 3
 
 # 抓取填空题，3空题
-node ./dist/index.js scrape -k zsd28279 -t t3 -fc 3 -l 10
+zujuan scrape -k zsd28279 -t t3 -fc 3 -l 10
 
 # 抓取多选题，4个答案
-node ./dist/index.js scrape -k zsd28279 -t t2 -mc 4 -l 5
+zujuan scrape -k zsd28279 -t t2 -mc 4 -l 5
 
 # 抓取第2页结果
-node ./dist/index.js scrape -k zsd28279 -l 5 -p 2
+zujuan scrape -k zsd28279 -l 5 -p 2
 ```
 
 ---
@@ -171,7 +172,7 @@ node ./dist/index.js scrape -k zsd28279 -l 5 -p 2
 关闭后台运行的浏览器进程。
 
 ```bash
-node ./dist/index.js shutup
+zujuan shutup
 ```
 
 会关闭 Chromium 主进程及所有子进程，并清理 `.browser-state.json` 状态文件。
@@ -184,123 +185,127 @@ node ./dist/index.js shutup
 
 ```bash
 # 查看当前全部配置
-node ./dist/index.js config
+zujuan config
 
 # 设置/更新配置项
-node ./dist/index.js config [options]
+zujuan config [options]
+
+# 重置配置（删除配置文件，恢复所有代码默认值）
+zujuan config --reset
 ```
 
 **可设置的配置项：**
 
 | 选项 | 说明 | 默认值 |
 |------|------|--------|
-| `-c, --cookie <cookie>` | 设置认证 cookie | 空 |
-| `-o, --output <path>` | 设置输出目录 | `./zujuan-output` |
-| `-b, --browser-path <path>` | 设置浏览器可执行文件路径 | `null`（自动查找） |
-| `-q, --qr-code-path <path>` | 设置二维码图片保存路径 | `./login-qrcode.png` |
-| `-g, --default-grade <grade>` | 设置默认年级：`high`=高中 `middle`=初中 | `high` |
-| `-r, --default-order <order>` | 设置默认排序：`latest`/`hot`/`comprehensive` | `latest` |
-| `-p, --browser-port <port>` | 设置浏览器调试端口 | `9222` |
-| `-h, --headless <enabled>` | 设置无头模式：`true`/`false` | `true` |
-| `-l, --log-enabled <enabled>` | 设置是否启用日志：`true`/`false` | `true` |
-| `--log-path <path>` | 设置日志文件路径 | `./zujuan.log` |
-| `-ll, --log-level <level>` | 设置默认日志级别：`quiet`/`normal`/`verbose` | `quiet` |
+| `--browser-dir <path>` | 设置浏览器可执行文件路径（留空则自动检测） | 自动检测 |
+| `--login-qr-dir <path>` | 设置登录二维码保存目录 | `~/.zujuan-scraper/` |
+| `--log-dir <path>` | 设置日志文件目录 | `~/.zujuan-scraper/` |
+| `--tree-db <path>` | 设置知识树数据库文件路径 | `~/.zujuan-scraper/knowledge-tree.db` |
+| `-g, --grade <grade>` | 设置默认年级：`high`=高中 `middle`=初中 | `high` |
+| `-r, --order <order>` | 设置默认排序：`latest`/`hot`/`comprehensive` | `latest` |
+| `-d, --depth <n>` | 设置 list 命令默认最大查询深度 | `1` |
+| `-ll, --log-level <level>` | 设置日志级别：`quiet`/`normal`/`verbose` | `quiet` |
+
+> 隐藏配置项（不暴露在帮助文本中，但可通过 `config --reset` 恢复默认值）：`cookie`、`browserPort`、`headless`、`logEnabled`
 
 **示例：**
 
 ```bash
 # 查看当前配置
-node ./dist/index.js config
+zujuan config
 
 # 设置默认年级为初中
-node ./dist/index.js config -g middle
+zujuan config -g middle
 
 # 设置默认排序为最热
-node ./dist/index.js config -r hot
+zujuan config -r hot
 
 # 同时设置年级和排序
-node ./dist/index.js config -g middle -r hot
+zujuan config -g middle -r hot
 
-# 修改输出目录
-node ./dist/index.js config -o /data/zujuan-output
+# 设置日志级别为详细（调试用）
+zujuan config -ll verbose
 
-# 关闭无头模式（调试用，显示浏览器窗口）
-node ./dist/index.js config -h false
-
-# 修改浏览器调试端口
-node ./dist/index.js config -p 9223
-
-# 关闭日志
-node ./dist/index.js config --log-enabled false
-
-# 设置默认日志级别为普通（日常使用）
-node ./dist/index.js config -ll normal
-
-# 设置默认日志级别为详细（调试用）
-node ./dist/index.js config -ll verbose
+# 重置所有配置为默认值
+zujuan config --reset
 ```
 
 ---
 
 ### list 命令
 
-查看或搜索知识点树，获取可用知识点 ID。
+查看或搜索知识点树，获取可用知识点 ID。使用 SQLite 加速搜索。
 
 ```bash
-node ./dist/index.js list [options]
+zujuan list [options]
 ```
 
 **选项：**
 
 | 选项 | 说明 |
 |------|------|
-| `-t, --tree` | 显示完整知识点树 |
 | `-s, --search <name>` | 搜索知识点名称（模糊匹配） |
-| `-i, --id <id>` | 通过 ID 查找知识点详情 |
-| `-p, --path <id>` | 显示知识点的完整路径 |
+| `-i, --id <id>` | 从指定知识点节点查询其子孙节点 |
+| `-t, --tree` | 显示完整知识点树（默认高中） |
 | `-m, --middle` | 使用初中知识点树（默认高中） |
-| `--level <level>` | 显示指定层级的知识点 |
+| `--depth <n>` | 最大查询深度（-1=无限制，不指定则使用配置默认值） |
+| `--refresh` | 强制从知识点树文件重建数据库 |
 
 **示例：**
 
 ```bash
-# 查看高中知识点树
-node ./dist/index.js list --tree
-
 # 搜索包含"函数"的知识点
-node ./dist/index.js list --search 函数
+zujuan list --search 函数
+
+# 查看高中知识点树（默认深度1）
+zujuan list --tree
+
+# 查看高中知识点树，深度2
+zujuan list --tree --depth 2
 
 # 搜索初中知识点
-node ./dist/index.js list --search 三角形 --middle
+zujuan list --search 三角形 --middle
 
-# 通过ID查看知识点详情
-node ./dist/index.js list --id zsd28279
+# 通过ID查看知识点详情及其子孙
+zujuan list --id zsd28279 --depth 3
 
-# 显示知识点的完整路径
-node ./dist/index.js list --path zsd28279
+# 强制从文本文件重建数据库
+zujuan list --refresh
 ```
 
 ---
 
 ## 配置
 
-配置文件位于 `~/.zujuan-scraper/config.json`，由 `config` 命令自动管理，无需手动编辑。
+所有用户数据统一存储在 `~/.zujuan-scraper/` 目录下：
 
-**配置项详解：**
+- `config.json` — 用户配置
+- `storage-state.json` — 登录 Cookie 状态
+- `.browser-state.json` — 浏览器 PID + WebSocket 端点
+- `zujuan.log` — 运行日志
+- `login-qr.png` — 二维码截图
+- `knowledge-tree.db` — 知识点树 SQLite 数据库
+- `KNOWLEDGE_TREE_HIGH.txt` / `KNOWLEDGE_TREE_MIDDLE.txt` — 知识点树文本文件
+
+配置文件由 `config` 命令自动管理，`npm install` 时自动复制知识点树文件，无需手动操作。
+
+**配置优先级：命令行参数 > 配置文件 > 代码默认值**
+
+**可见配置项：**
 
 | 配置项 | 类型 | 说明 | 默认值 |
 |--------|------|------|--------|
-| `cookie` | `string` | 认证 Cookie（通常无需手动设置，扫码登录自动保存） | `""` |
-| `outputDir` | `string` | 抓取结果输出目录 | `"./zujuan-output"` |
-| `browserPath` | `string` | Chromium 可执行文件路径，`null` 表示自动查找 Playwright 内置浏览器 | `null` |
-| `defaultGrade` | `"high" \| "middle"` | scrape 命令未指定年级时的默认值 | `"high"` |
-| `defaultOrder` | `"latest" \| "hot" \| "comprehensive"` | scrape 命令未指定排序时的默认值 | `"latest"` |
-| `headless` | `boolean` | 是否使用无头模式（服务器建议 `true`） | `true` |
-| `qrCodePath` | `string` | 登录二维码图片保存路径 | `"./login-qrcode.png"` |
-| `browserPort` | `number` | Chrome 远程调试端口 | `9222` |
-| `logEnabled` | `boolean` | 是否启用日志记录 | `true` |
-| `logPath` | `string` | 日志文件保存路径 | `"./zujuan.log"` |
-| `defaultLogLevel` | `"quiet" \| "normal" \| "verbose"` | scrape 命令默认日志级别，可被 `-ll` 参数覆盖 | `"quiet"` |
+| `browserDir` | `string` | Chrome/Chromium 路径（留空自动检测） | 自动检测 |
+| `loginQrDir` | `string` | 登录二维码保存目录 | `~/.zujuan-scraper/` |
+| `logDir` | `string` | 日志文件目录 | `~/.zujuan-scraper/` |
+| `treeDb` | `string` | 知识树数据库路径 | `~/.zujuan-scraper/knowledge-tree.db` |
+| `grade` | `"high" \| "middle"` | 默认年级 | `"high"` |
+| `order` | `"latest" \| "hot" \| "comprehensive"` | 默认排序 | `"latest"` |
+| `treeDepth` | `number` | list 命令默认最大查询深度 | `1` |
+| `logLevel` | `"quiet" \| "normal" \| "verbose"` | 默认日志级别 | `"quiet"` |
+
+**隐藏配置项**（不暴露在 `config` 命令中）：`cookie`、`browserPort`、`headless`、`logEnabled`
 
 ---
 
@@ -382,10 +387,17 @@ zujuan-output/
            │                    │
            ▼                    ▼
 ┌──────────────────────────────────────────────────────────┐
-│                      文件层                               │
-│  .browser-state.json — 浏览器 PID / WebSocket 端点        │
-│  storage-state.json   — 登录 Cookie 状态                  │
-│  ~/.zujuan-scraper/config.json — 用户配置                  │
+│                 ~/.zujuan-scraper/                        │
+│  config.json          用户配置                             │
+│  storage-state.json   登录 Cookie 状态                    │
+│  .browser-state.json  浏览器 PID / WebSocket 端点         │
+│  zujuan.log           运行日志                             │
+│  login-qr.png         二维码截图                           │
+│  knowledge-tree.db     知识点树 SQLite 数据库              │
+└──────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                 ./zujuan-output/                          │
+│  抓取结果：题目截图、答案图片、JSON 结果                    │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -428,10 +440,10 @@ zujuan-output/
 
 ```bash
 # 搜索
-node ./dist/index.js list --search 极值
+zujuan list --search 极值
 
 # 查看知识点树
-node ./dist/index.js list --tree
+zujuan list --tree
 ```
 
 ID 格式为 `zsd` 开头的一串数字，如 `zsd28279`。
@@ -446,10 +458,10 @@ ID 格式为 `zsd` 开头的一串数字，如 `zsd28279`。
 
 ```bash
 # 抓取第2页
-node ./dist/index.js scrape -k zsd28279 -l 10 -p 2
+zujuan scrape -k zsd28279 -l 10 -p 2
 
 # 抓取第3页
-node ./dist/index.js scrape -k zsd28279 -l 10 -p 3
+zujuan scrape -k zsd28279 -l 10 -p 3
 ```
 
 ### Q：多选题和填空题有额外参数吗？
@@ -471,8 +483,8 @@ node ./dist/index.js scrape -k zsd28279 -l 10 -p 3
 命令行参数**优先于**配置文件。例如：
 
 ```bash
-# 配置中 defaultGrade=high，但命令行指定了 middle
-node ./dist/index.js scrape -k zsd5391 -g middle
+# 配置中 grade=high，但命令行指定了 middle
+zujuan scrape -k zsd5391 -g middle
 ```
 
 → 实际使用初中 `czsx` 路径，而非配置文件中的高中。
@@ -484,30 +496,30 @@ node ./dist/index.js scrape -k zsd5391 -g middle
 解决方法：
 ```bash
 # 先关闭所有 Chrome 进程
-node ./dist/index.js shutup
+zujuan shutup
 
 # 或手动强制关闭
 pkill -9 chrome
 
 # 重新启动
-node ./dist/index.js start
+zujuan start
 ```
 
 工具已增加端口检测，即使状态文件丢失也会自动检测并复用已运行的浏览器。
 
 ### Q：登录状态多久过期？
 
-取决于组卷网的 Session 有效期，通常为**数天到数周**。过期后需重新扫码登录：删除 `storage-state.json`，运行 `start` 重新扫码。
+取决于组卷网的 Session 有效期，通常为**数天到数周**。过期后需重新扫码登录：删除 `~/.zujuan-scraper/storage-state.json`，运行 `start` 重新扫码。
 
 ### Q：如何部署到服务器/云端？
 
 1. 本地完成首次扫码登录（`start` 命令），`storage-state.json` 会自动保存
 2. 将项目（含 `storage-state.json`）部署到服务器
 3. 服务器上无需重新登录，可直接运行 `scrape` 命令
-4. 建议使用 `npm start` 运行（已内置 `--no-deprecation` 消除 Node.js 弃用警告）：
+4. 建议使用全局安装后的 `zujuan` 命令运行：
 
 ```bash
-npm start -- scrape -k zsd28279 -l 5
+zujuan scrape -k zsd28279 -l 5
 ```
 
 ### Q：题目截图中包含了示例图，如何分离？
@@ -528,30 +540,15 @@ npm start -- scrape -k zsd28279 -l 5
 
 ### 登录状态持久化
 
-扫码登录后，`storage-state.json` 保存了登录状态。部署时将此文件一同部署，服务器即可"免登录"使用。
+扫码登录后，`~/.zujuan-scraper/storage-state.json` 保存了登录状态。部署时将此文件一同部署，服务器即可"免登录"使用。
 
 ### 端口冲突
 
-如需同时运行多个实例，为每个实例分配不同端口：
-
-```bash
-# 实例1
-node ./dist/index.js config -p 9222
-node ./dist/index.js start
-
-# 实例2
-node ./dist/index.js config -p 9223
-node ./dist/index.js start
-```
+如需同时运行多个实例，为每个实例分配不同端口：编辑 `~/.zujuan-scraper/config.json`，将 `browserPort` 改为不同值（如 `9222`、`9223`），再分别启动浏览器。
 
 ### 无头模式
 
-服务器建议使用无头模式：
-
-```bash
-node ./dist/index.js config -h true
-node ./dist/index.js start
-```
+服务器建议使用无头模式：编辑 `~/.zujuan-scraper/config.json`，将 `headless` 改为 `true`。
 
 ---
 

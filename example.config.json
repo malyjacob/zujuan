@@ -1,0 +1,25 @@
+{
+  // 浏览器可执行文件路径（留空则自动检测）
+  "browserDir": "",
+
+  // 登录二维码保存目录
+  "loginQrDir": "~/.zujuan-scraper/",
+
+  // 日志文件目录
+  "logDir": "~/.zujuan-scraper/",
+
+  // 知识树数据库文件路径
+  "treeDb": "~/.zujuan-scraper/knowledge-tree.db",
+
+  // 默认年级: high=高中 middle=初中
+  "grade": "high",
+
+  // 默认排序: latest=最新 hot=最热 comprehensive=综合
+  "order": "latest",
+
+  // list 命令默认最大查询深度
+  "treeDepth": 1,
+
+  // 日志级别: quiet=纯净 normal=普通 verbose=详细
+  "logLevel": "quiet"
+}

@@ -21,10 +21,9 @@ export function createScrapeCommand(): Command {
     .option('-t, --type <type>', '题型: t1=单选 t2=多选 t3=填空 t4=解答 t5=判断 t6=概念填空')
     .option('-d, --difficulty <level>', '难度: d1=容易 d2=较易 d3=适中 d4=较难 d5=困难')
     .option('-y, --year <year>', '年份: 2026/2025/2024/2023/-1（-1表示更早）')
-    .option('-g, --grade <grade>', '年级: high=高中 middle=初中（默认使用配置中的defaultGrade）')
-    .option('-r, --order <order>', '排序: latest=最新 hot=最热 comprehensive=综合（默认使用配置中的defaultOrder）')
+    .option('-g, --grade <grade>', '年级: high=高中 middle=初中（默认: 配置中的 grade）')
+    .option('-r, --order <order>', '排序: latest=最新 hot=最热 comprehensive=综合（默认: 配置中的 order）')
     .option('-l, --limit <number>', '最大抓取截图数量（1-10，默认10）', '10')
-    .option('-o, --output <path>', '输出目录（默认配置中的路径）')
     .option('-mc, --multi-count <number>', '多选题答案数量: 2, 3, 4及以上')
     .option('-fc, --fill-count <number>', '填空题空数: 1, 2, 3及以上')
     .option('-p, --page <number>', '分页页码（默认1，第二页起为o2p2格式）')
@@ -32,9 +31,9 @@ export function createScrapeCommand(): Command {
     .action(async (options) => {
       const limit = Math.min(10, Math.max(1, parseInt(options.limit) || 10));
       // 年级：命令行指定优先，否则使用配置默认值
-      const grade = (options.grade as Grade) || configManager.get('defaultGrade');
+      const grade = (options.grade as Grade) || configManager.get('grade');
       // 排序：命令行指定优先，否则使用配置默认值
-      const order = (options.order as Order) || configManager.get('defaultOrder');
+      const order = (options.order as Order) || configManager.get('order');
 
       const scrapeOptions: ScrapeOptions = {
         knowledge: options.knowledge,
@@ -44,11 +43,10 @@ export function createScrapeCommand(): Command {
         grade,
         order,
         limit,
-        output: options.output || configManager.get('outputDir'),
         multiCount: options.multiCount ? parseInt(options.multiCount) : undefined,
         fillCount: options.fillCount ? parseInt(options.fillCount) : undefined,
         page: options.page ? parseInt(options.page) : undefined,
-        logLevel: (options.logLevel || configManager.get('defaultLogLevel')) as LogLevel,
+        logLevel: (options.logLevel || configManager.get('logLevel')) as LogLevel,
       };
 
       const gradeName = grade === 'high' ? '高中' : '初中';

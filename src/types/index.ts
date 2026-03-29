@@ -1,31 +1,37 @@
-// CLI配置选项
+// CLI配置选项（与 Config 键同名，便于直接透传）
 export interface ConfigOptions {
+  // 可见选项
+  browserDir?: string;
+  loginQrDir?: string;
+  logDir?: string;
+  treeDb?: string;
+  grade?: 'high' | 'middle';
+  order?: Order;
+  treeDepth?: number;
+  logLevel?: LogLevel;
+  // 隐藏选项（代码内部使用，不暴露给 config 命令）
   cookie?: string;
-  output?: string;
-  browserPath?: string;
-  qrCodePath?: string;
-  defaultGrade?: 'high' | 'middle';
-  defaultOrder?: Order;
   browserPort?: number;
   headless?: boolean;
   logEnabled?: boolean;
-  logPath?: string;
-  defaultLogLevel?: LogLevel;
 }
 
 // 配置文件结构
 export interface Config {
+  // 可见选项
+  browserDir: string;
+  loginQrDir: string;
+  logDir: string;
+  treeDb: string;
+  grade: 'high' | 'middle';
+  order: Order;
+  treeDepth: number;
+  logLevel: LogLevel;
+  // 隐藏选项
   cookie: string;
-  outputDir: string;
-  browserPath: string;
-  defaultGrade: 'high' | 'middle';
-  defaultOrder: Order;
-  headless: boolean;
-  qrCodePath: string;
   browserPort: number;
+  headless: boolean;
   logEnabled: boolean;
-  logPath: string;
-  defaultLogLevel: LogLevel;
 }
 
 // 日志级别
@@ -70,7 +76,6 @@ export interface ScrapeOptions {
   grade?: Grade;
   order?: Order;
   limit?: number;
-  output?: string;
   multiCount?: number; // 多选题答案数: 2, 3, 4+
   fillCount?: number; // 填空题空数: 1, 2, 3+
   page?: number; // 分页页码

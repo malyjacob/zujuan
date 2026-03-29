@@ -4,21 +4,25 @@ import * as fs from 'fs';
 import { spawn, ChildProcess } from 'child_process';
 import * as http from 'http';
 import terminalImage from 'terminal-image';
-import { configManager } from './config';
+import { configManager, getConfigDir, autoDetectBrowser } from './config';
 import { BrowserState } from '../types';
 
-const STORAGE_STATE_FILE = path.join(process.cwd(), 'storage-state.json');
-const BROWSER_STATE_FILE = path.join(process.cwd(), '.browser-state.json');
+const STORAGE_STATE_FILE = path.join(getConfigDir(), 'storage-state.json');
+const BROWSER_STATE_FILE = path.join(getConfigDir(), '.browser-state.json');
 
 // 日志写入函数
 function writeLog(message: string, level: 'INFO' | 'WARN' | 'ERROR' = 'INFO'): void {
   if (!configManager.get('logEnabled')) return;
 
-  const logPath = configManager.get('logPath');
+  const logDir = configManager.get('logDir');
+  const logPath = path.join(logDir, 'zujuan.log');
   const timestamp = new Date().toISOString();
   const logMessage = `[${timestamp}] [${level}] ${message}\n`;
 
   try {
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
     fs.appendFileSync(logPath, logMessage, 'utf-8');
   } catch (error) {
     console.error('写入日志失败:', error);
@@ -46,6 +50,26 @@ export class BrowserStateManager {
       writeLog(`读取浏览器状态失败: ${error}`, 'ERROR');
     }
     return null;
+  }
+
+  /**
+   * 保存启动前最小状态（PID + port，wsEndpoint 尚不可用）。
+   * 在 Chrome 刚 spawn 后立即调用，确保 Ctrl+C 中断后状态文件已存在，
+   * 下次 start 能感知到 Chrome 在运行。
+   */
+  static saveStartup(pid: number, port: number): void {
+    try {
+      const state: BrowserState = {
+        wsEndpoint: '',
+        pid,
+        port,
+        startedAt: new Date().toISOString(),
+      };
+      fs.writeFileSync(BROWSER_STATE_FILE, JSON.stringify(state, null, 2), 'utf-8');
+      writeLog(`Chrome 已启动，PID=${pid}，等待 CDP 端点...`);
+    } catch (error) {
+      writeLog(`保存启动状态失败: ${error}`, 'ERROR');
+    }
   }
 
   static clear(): void {
@@ -204,7 +228,7 @@ export class BrowserManager {
   async launch(): Promise<void> {
     writeLog('开始启动浏览器...');
 
-    const browserPath = configManager.get('browserPath');
+    const browserDir = configManager.get('browserDir');
     const headless = configManager.get('headless');
     const port = configManager.get('browserPort');
 
@@ -229,12 +253,19 @@ export class BrowserManager {
       throw new Error('浏览器已在运行');
     }
 
-    // 找到 chromium 可执行文件
-    const chromiumPath = browserPath || 
-      '/root/.cache/ms-playwright/chromium-1208/chrome-linux64/chrome';
+    // 找到 chromium 可执行文件（优先用配置的，兜底自动检测）
+    let chromiumPath = browserDir;
+    if (!chromiumPath || !fs.existsSync(chromiumPath)) {
+      const detected = autoDetectBrowser();
+      if (detected) {
+        chromiumPath = detected;
+      }
+    }
 
-    if (!fs.existsSync(chromiumPath)) {
-      throw new Error(`浏览器可执行文件不存在: ${chromiumPath}`);
+    if (!chromiumPath || !fs.existsSync(chromiumPath)) {
+      throw new Error(
+        `未找到浏览器可执行文件，请通过 config --browser-dir 指定 Chrome/Chromium 安装路径`
+      );
     }
 
     const args = [
@@ -264,9 +295,24 @@ export class BrowserManager {
         writeLog(`Chromium 进程已启动，PID: ${this.pid}`);
       }
 
+      // 尽早保存最小状态，这样 Ctrl+C 在 getWsEndpoint 轮询阶段中断时，
+      // 下次 start 仍能感知到 Chrome 在运行
+      if (this.pid) {
+        BrowserStateManager.saveStartup(this.pid, port);
+      }
+
       // 获取 WebSocket 端点
       this.wsEndpoint = await getWsEndpoint(port);
       writeLog(`WebSocket 端点: ${this.wsEndpoint}`);
+
+      // 连接成功后将完整状态（包含 wsEndpoint）覆盖写入
+      BrowserStateManager.save({
+        wsEndpoint: this.wsEndpoint,
+        pid: this.pid!,
+        port,
+        startedAt: new Date().toISOString(),
+      });
+      writeLog('浏览器状态已保存（启动阶段）');
 
       // 通过 CDP 连接到浏览器
       this.browser = await chromium.connectOverCDP(this.wsEndpoint);
@@ -358,8 +404,11 @@ export class BrowserManager {
     writeLog(`连接到浏览器，PID: ${state.pid}`);
 
     try {
-      this.browser = await chromium.connectOverCDP(state.wsEndpoint);
-      this.wsEndpoint = state.wsEndpoint;
+      // 如果 wsEndpoint 为空（上次 launch 在 getWsEndpoint 轮询阶段被 Ctrl+C 中断），
+      // 重新从端口获取 WebSocket 端点
+      const endpoint = state.wsEndpoint || await getWsEndpoint(state.port);
+      this.browser = await chromium.connectOverCDP(endpoint);
+      this.wsEndpoint = endpoint;
       this.pid = state.pid;
 
       const contexts = this.browser.contexts();
@@ -428,9 +477,13 @@ export class BrowserManager {
       console.log('正在获取二维码...');
       await this.page!.waitForSelector('#qrcode canvas', { timeout: 5000 });
 
-      const qrCodePath = configManager.get('qrCodePath');
+      const loginQrDir = configManager.get('loginQrDir');
+      const qrCodePath = path.join(loginQrDir, 'login-qr.png');
       const qrcode = await this.page!.$('#qrcode');
       if (qrcode) {
+        if (!fs.existsSync(loginQrDir)) {
+          fs.mkdirSync(loginQrDir, { recursive: true });
+        }
         await qrcode.screenshot({ path: qrCodePath });
         try {
           console.log('\n' + await terminalImage.file(qrCodePath, { width: 30 }) + '\n');

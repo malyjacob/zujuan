@@ -5,12 +5,10 @@ node_modules/
 dist/
 
 # generated files
-storage-state.json
-cookie.txt
-login-qrcode.png
 zujuan-output/
-.browser-state.json
-zujuan.log
+
+# local database (now stored in ~/.zujuan-scraper/)
+knowledge-tree.db
 
 # OS files
 .DS_Store

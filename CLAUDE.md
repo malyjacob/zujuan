@@ -13,9 +13,7 @@
 ### 1. 启动浏览器并登录
 
 ```bash
-node ./dist/index.js start
-# 或使用已屏蔽警告的 npm 脚本
-npm start -- start
+zujuan start
 ```
 
 首次使用需要手机微信扫码登录（60秒内）。成功后浏览器在后台运行。
@@ -23,7 +21,7 @@ npm start -- start
 ### 2. 抓取题目
 
 ```bash
-node ./dist/index.js scrape -k <知识点ID> [options]
+zujuan scrape -k <知识点ID> [options]
 ```
 
 **必填参数：**
@@ -41,61 +39,71 @@ node ./dist/index.js scrape -k <知识点ID> [options]
 
 **示例：**
 ```bash
-node ./dist/index.js scrape -k zsd28279 -t t1 -g high -l 5
-node ./dist/index.js scrape -k zsd5391 -g middle -t t4 -d d4 -l 3
+zujuan scrape -k zsd28279 -t t1 -g high -l 5
+zujuan scrape -k zsd5391 -g middle -t t4 -d d4 -l 3
 ```
 
 ### 3. 关闭浏览器
 
 ```bash
-node ./dist/index.js shutup
+zujuan shutup
 ```
 
-### 4. 搜索知识点
-
-```bash
-# 搜索知识点
-node ./dist/index.js list --search 函数
-
-# 查看知识点树
-node ./dist/index.js list --tree
-
-# 通过ID查看知识点详情
-node ./dist/index.js list --id zsd28279
-```
-
-### 5. 查看/修改配置
+### 4. 查看/修改配置
 
 ```bash
 # 查看配置
-node ./dist/index.js config
+zujuan config
 
 # 修改配置
-node ./dist/index.js config -g middle      # 默认年级改为初中
-node ./dist/index.js config -r hot         # 默认排序改为最热
-node ./dist/index.js config -h false        # 关闭无头模式（显示浏览器窗口）
+zujuan config -g middle      # 默认年级改为初中
+zujuan config -r hot         # 默认排序改为最热
+zujuan config -ll verbose    # 日志级别改为详细
+
+# 重置配置（删除配置文件，恢复代码默认值）
+zujuan config --reset
+```
+
+### 5. 搜索知识点（SQLite 加速）
+
+```bash
+# 搜索知识点（模糊匹配）
+zujuan list --search 函数
+
+# 查看完整知识点树
+zujuan list --tree
+
+# 查看指定深度树（默认: 配置中的 treeDepth）
+zujuan list --depth 2
+
+# 通过ID查看知识点详情及其子孙
+zujuan list --id zsd28279 --depth 3
+
+# 强制从文本文件重建数据库
+zujuan list --refresh
 ```
 
 ## 项目结构
 
 ```
 src/
-├── index.ts              # CLI 入口，注册所有子命令
+├── index.ts                    # CLI 入口，注册所有子命令
 ├── commands/
-│   ├── start.ts          # start 命令：启动浏览器 + 扫码登录
-│   ├── scrape.ts         # scrape 命令：抓取题目
-│   ├── shutup.ts         # shutup 命令：关闭浏览器
-│   ├── config.ts         # config 命令：查看/修改配置
-│   └── list.ts           # list 命令：搜索/查看知识点
+│   ├── start.ts              # start 命令：启动浏览器 + 扫码登录
+│   ├── scrape.ts             # scrape 命令：抓取题目
+│   ├── shutup.ts             # shutup 命令：关闭浏览器
+│   ├── config.ts             # config 命令：查看/修改配置
+│   └── list.ts               # list 命令：搜索/查看知识点（SQLite）
 ├── lib/
-│   ├── browser.ts        # BrowserManager：Playwright 浏览器生命周期管理
-│   ├── scraper.ts        # ScraperEngine：题目抓取核心逻辑
-│   ├── ocr.ts            # Tesseract.js OCR 识别封装
-│   ├── url-builder.ts    # URL 构建，按年级/题型/难度等生成目标 URL
-│   ├── config.ts         # ConfigManager：配置文件读写
-│   └── knowledge-tree.ts # 知识点树数据管理
+│   ├── browser.ts            # BrowserManager：Playwright 浏览器生命周期管理
+│   ├── scraper.ts            # ScraperEngine：题目抓取核心逻辑
+│   ├── ocr.ts                # Tesseract.js OCR 识别封装
+│   ├── url-builder.ts        # URL 构建，按年级/题型/难度等生成目标 URL
+│   ├── config.ts             # ConfigManager：配置文件读写
+│   ├── knowledge-tree.ts     # 旧版树解析（scraper 还在用）
+│   └── knowledge-tree-sqlite.ts # SQLite 版树存储（list 命令使用）
 └── types/
-    └── index.ts          # TypeScript 类型定义
+    └── index.ts              # TypeScript 类型定义
 ```
 
 ## 关键逻辑说明
@@ -131,9 +139,18 @@ src/
 
 ### 文件持久化
 
-- `.browser-state.json` — 浏览器 PID + WebSocket 端点
-- `storage-state.json` — 登录 Cookie 状态（扫码登录后生成）
+所有用户数据统一存储在 `~/.zujuan-scraper/` 目录下：
+
 - `~/.zujuan-scraper/config.json` — 用户配置
+- `~/.zujuan-scraper/storage-state.json` — 登录 Cookie 状态（扫码登录后生成）
+- `~/.zujuan-scraper/.browser-state.json` — 浏览器 PID + WebSocket 端点
+- `~/.zujuan-scraper/zujuan.log` — 运行日志
+- `~/.zujuan-scraper/login-qr.png` — 二维码截图
+- `~/.zujuan-scraper/knowledge-tree.db` — 知识点树 SQLite 数据库
+- `~/.zujuan-scraper/KNOWLEDGE_TREE_HIGH.txt` — 高中知识点树文本（npm install/postinstall 时自动复制）
+- `~/.zujuan-scraper/KNOWLEDGE_TREE_MIDDLE.txt` — 初中知识点树文本
+
+抓取结果输出到 `./zujuan-output/`（项目目录下）。
 
 ### 注意事项
 
@@ -144,7 +161,26 @@ src/
 
 ## 调试建议
 
-- 关闭无头模式查看浏览器：`node ./dist/index.js config -h false`
-- 查看日志：`tail -f ./zujuan.log`
+- 关闭无头模式查看浏览器：编辑 `~/.zujuan-scraper/config.json` 将 `headless` 改为 `false`（然后重启 start）
+- 查看日志：`tail -f ~/.zujuan-scraper/zujuan.log`
 - 页面结构异常时抓取结果会包含 `page_debug_*.html` 供调试
 - 浏览器崩溃后运行 `shutup` 再 `start` 重启
+- 知识点数据库损坏：运行 `list --refresh` 强制重建
+
+## 配置说明
+
+配置优先级：**命令行参数** > **配置文件** > **代码默认值**
+
+可见配置项（`config` 命令可查看/修改）：
+| 键 | 说明 | 默认值 |
+|---|---|---|
+| `browserDir` | Chrome/Chromium 路径 | 自动检测 |
+| `loginQrDir` | 登录二维码目录 | `~/.zujuan-scraper/` |
+| `logDir` | 日志文件目录 | `~/.zujuan-scraper/` |
+| `treeDb` | 知识树数据库路径 | `~/.zujuan-scraper/knowledge-tree.db` |
+| `grade` | 默认年级 | `high` |
+| `order` | 默认排序 | `latest` |
+| `treeDepth` | list 默认查询深度 | `1` |
+| `logLevel` | 日志级别 | `quiet` |
+
+隐藏配置项（不暴露在 `config` 命令中）：`cookie`、`browserPort`、`headless`、`logEnabled`
