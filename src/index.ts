@@ -6,6 +6,7 @@ import { createStartCommand } from './commands/start';
 import { createShutupCommand } from './commands/shutup';
 import { createScrapeCommand } from './commands/scrape';
 import { createListCommand } from './commands/list';
+import { createBrowseCommand } from './commands/browse';
 
 const program = new Command();
 
@@ -20,5 +21,6 @@ program.addCommand(createStartCommand());
 program.addCommand(createShutupCommand());
 program.addCommand(createScrapeCommand());
 program.addCommand(createListCommand());
+program.addCommand(createBrowseCommand());
 
 program.parse(process.argv);

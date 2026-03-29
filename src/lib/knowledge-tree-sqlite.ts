@@ -34,7 +34,12 @@ export interface NodeWithLevel {
   level: number;
 }
 
-function getDb(): Database.Database {
+/** 导出的 getDb，内部用 _getDb 实现 */
+export function getDb(): Database.Database {
+  return _getDb();
+}
+
+function _getDb(): Database.Database {
   const dbPath = getDbPath();
 
   // 如果路径变了，关闭旧连接
@@ -78,7 +83,7 @@ function getDb(): Database.Database {
 
 /** 检查数据库的元数据，决定是否需要重建 */
 function needsRebuild(): boolean {
-  const database = getDb();
+  const database = _getDb();
   const row = database.prepare('SELECT value FROM meta WHERE key = ?').get('tree_dir') as
     | { value: string }
     | undefined;
@@ -108,7 +113,7 @@ export function importTreeFromFile(grade: 'high' | 'middle'): number {
   const content = fs.readFileSync(filePath, 'utf-8');
   const lines = content.split('\n');
 
-  const database = getDb();
+  const database = _getDb();
 
   // 清除旧数据
   database.prepare('DELETE FROM knowledge_nodes WHERE grade = ?').run(grade);
@@ -159,25 +164,16 @@ export function importTreeFromFile(grade: 'high' | 'middle'): number {
 /** 初始化数据库：文件不存在则自动创建，已存在则检查目录是否变更 */
 export function ensureDatabase(): void {
   if (db && !needsRebuild()) return; // DB 已存在且目录未变，直接复用
-  getDb();
+  _getDb();
   if (needsRebuild()) {
     importTreeFromFile('high');
     importTreeFromFile('middle');
   }
 }
 
-/** 关闭数据库连接（下次 ensureDatabase 会按新配置重新打开） */
-export function closeDatabase(): void {
-  if (db) {
-    db.close();
-    db = null;
-    lastDbPath = null;
-  }
-}
-
 /** 查询单个节点 */
 export function getNodeById(id: string, grade: 'high' | 'middle'): KnowledgeNodeRow | null {
-  const row = getDb()
+  const row = _getDb()
     .prepare('SELECT * FROM knowledge_nodes WHERE id = ? AND grade = ?')
     .get(id, grade) as KnowledgeNodeRow | undefined;
   return row || null;
@@ -190,7 +186,7 @@ export function getDescendants(
   searchTerm?: string,
   grade: 'high' | 'middle' = 'high'
 ): NodeWithLevel[] {
-  const database = getDb();
+  const database = _getDb();
   const results: NodeWithLevel[] = [];
 
   // 首先查询根节点自身（level=0）
@@ -247,7 +243,7 @@ export function getDescendantsFromRoots(
   searchTerm?: string,
   grade: 'high' | 'middle' = 'high'
 ): NodeWithLevel[] {
-  const database = getDb();
+  const database = _getDb();
 
   // 无搜索词：直接返回指定深度内的节点（level 0=根 → display=1）
   if (!searchTerm) {
@@ -340,7 +336,7 @@ export function searchNodes(
   grade: 'high' | 'middle' = 'high'
 ): KnowledgeNodeRow[] {
   const lower = searchTerm.toLowerCase();
-  return getDb()
+  return _getDb()
     .prepare('SELECT * FROM knowledge_nodes WHERE name LIKE ? AND grade = ?')
     .all(`%${lower}%`, grade) as KnowledgeNodeRow[];
 }

@@ -83,6 +83,16 @@ zujuan list --id zsd28279 --depth 3
 zujuan list --refresh
 ```
 
+### 6. 交互式知识点浏览器（TUI）
+
+```bash
+zujuan browse                  # 启动高中知识点浏览器
+zujuan browse -g middle       # 初中知识点浏览器
+zujuan browse -i zsd28279    # 从指定节点开始浏览
+```
+
+键盘操作：`↑↓` 移动 `←→` 展开/折叠 `/` 搜索 `n` 下一匹配 `q` 退出
+
 ## 项目结构
 
 ```
@@ -93,7 +103,8 @@ src/
 │   ├── scrape.ts             # scrape 命令：抓取题目
 │   ├── shutup.ts             # shutup 命令：关闭浏览器
 │   ├── config.ts             # config 命令：查看/修改配置
-│   └── list.ts               # list 命令：搜索/查看知识点（SQLite）
+│   ├── list.ts               # list 命令：搜索/查看知识点（SQLite）
+│   └── browse.ts              # browse 命令：交互式 TUI 知识点浏览器
 ├── lib/
 │   ├── browser.ts            # BrowserManager：Playwright 浏览器生命周期管理
 │   ├── scraper.ts            # ScraperEngine：题目抓取核心逻辑
@@ -101,7 +112,11 @@ src/
 │   ├── url-builder.ts        # URL 构建，按年级/题型/难度等生成目标 URL
 │   ├── config.ts             # ConfigManager：配置文件读写
 │   ├── knowledge-tree.ts     # 旧版树解析（scraper 还在用）
-│   └── knowledge-tree-sqlite.ts # SQLite 版树存储（list 命令使用）
+│   └── knowledge-tree-sqlite.ts # SQLite 版树存储（list/browse 命令使用）
+├── ui/
+│   ├── index.ts              # TUI 主入口（blessed 事件循环）
+│   ├── tree.ts               # TreeState：树状态管理（展开/折叠/搜索）
+│   └── widgets.ts            # blessed 组件创建和渲染函数
 └── types/
     └── index.ts              # TypeScript 类型定义
 ```
