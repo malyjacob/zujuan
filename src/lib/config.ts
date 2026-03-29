@@ -79,28 +79,14 @@ export function autoDetectBrowser(): string | null {
   }
 
   if (isWindows()) {
-    // 尝试注册表
+    // 尝试 Windows PATH 中的 chrome.exe（无错误输出）
     try {
       const { execSync } = require('child_process');
-      const regPaths = [
-        'reg query "HKLM\\SOFTWARE\\Google\\Chrome\\BLBeacon" /v version',
-        'reg query "HKCU\\SOFTWARE\\Google\\Chrome\\BLBeacon" /v version',
-      ];
-      for (const regCmd of regPaths) {
-        try {
-          const out = execSync(regCmd, { encoding: 'utf8', timeout: 3000 });
-          const match = out.match(/InstallPath\s+REG_SZ\s+(.+)/i);
-          if (match) {
-            const installPath = match[1].trim();
-            const chromeExe = path.join(installPath, 'chrome.exe');
-            if (fileExists(chromeExe)) return chromeExe;
-          }
-        } catch {
-          // 注册表查不到，继续尝试其他路径
-        }
-      }
+      const out = execSync('where chrome 2>NUL', { encoding: 'utf8', timeout: 3000, windowsHide: true });
+      const firstPath = out.split('\n')[0].trim();
+      if (firstPath && fileExists(firstPath)) return firstPath;
     } catch {
-      // execSync 不可用
+      // where 未找到，继续尝试其他路径
     }
 
     const winCandidates = [
