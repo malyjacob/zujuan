@@ -128,7 +128,7 @@ export class ScraperEngine {
         const imagesSrc: string[] = [];
         const imagesPaths: string[] = [];
         await handle.evaluate((el, _imagesSrc: string[]) => {
-          const imgs = el.querySelectorAll('div.exam-item__cnt > p img');
+          const imgs = el.querySelectorAll('div.wrapper > div.exam-item__cnt > p img');
           imgs.forEach((img) => {
             const src = (img as HTMLImageElement).src;
             if (src) {
