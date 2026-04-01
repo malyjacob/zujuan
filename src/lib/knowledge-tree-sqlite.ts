@@ -286,17 +286,17 @@ export function getDescendantsFromRoots(
   const maxDepthCond = maxDepth === -1 ? '' : `AND display_level <= ${maxDepth}`;
   const rows = database
     .prepare(`
-      WITH RECURSIVE chain(id, name, parent_id, grade, level, display_level) AS (
-        SELECT id, name, parent_id, grade, level, 1 AS display_level
+      WITH RECURSIVE chain(id, name, parent_id, grade, level, display_level, pos) AS (
+        SELECT id, name, parent_id, grade, level, 1 AS display_level, pos
         FROM knowledge_nodes
         WHERE grade = ? AND parent_id IS NULL
         UNION ALL
-        SELECT k.id, k.name, k.parent_id, k.grade, k.level, c.display_level + 1
+        SELECT k.id, k.name, k.parent_id, k.grade, k.level, c.display_level + 1, k.pos
         FROM knowledge_nodes k
         JOIN chain c ON k.parent_id = c.id
         WHERE k.grade = ?
       )
-      SELECT id, name, parent_id, grade, level, display_level
+      SELECT id, name, parent_id, grade, level, display_level, pos
       FROM chain
       WHERE name LIKE ? ${maxDepthCond}
       ORDER BY display_level, pos
