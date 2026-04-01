@@ -142,7 +142,7 @@ export function importTreeFromFile(grade: 'high' | 'middle'): number {
     throw new Error(`知识树文件不存在: ${filePath}`);
   }
 
-  const content = fs.readFileSync(filePath, 'utf-8');
+  const content = fs.readFileSync(filePath, 'utf-8').replace(/\r/g, '');
   const lines = content.split('\n');
 
   const database = _getDb();
