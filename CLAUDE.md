@@ -36,20 +36,44 @@ zujuan scrape -k <知识点ID> [options]
 - `-mc <n>` — 多选题答案数量（2/3/4+）
 - `-fc <n>` — 填空题空数（1/2/3+）
 - `-p <n>` — 分页页码
+- `-e, --export` — 抓取完成后自动导出为 HTML 或 Markdown 文档
+- `--format <formats>` — 导出格式：`html` / `markdown` / `both`（逗号分隔）
+- `--theme <theme>` — 导出主题：`light`（白底）/ `dark`（深色）/ `sepia`（米黄）
 
 **示例：**
 ```bash
 zujuan scrape -k zsd28279 -t t1 -g high -l 5
 zujuan scrape -k zsd5391 -g middle -t t4 -d d4 -l 3
+zujuan scrape -k zsd27933 -e --format both --theme light
 ```
 
-### 3. 关闭浏览器
+### 3. 导出抓取结果
+
+```bash
+zujuan export [timestamp] [options]
+```
+
+将 `./zujuan-output/{timestamp}/` 中的抓取结果导出为 HTML 或 Markdown 文档。
+
+- `[timestamp]` — 抓取结果目录（时间戳），省略时自动查找最新目录
+- `--format <formats>` — 导出格式：`html` / `markdown` / `both`
+- `--theme <theme>` — 导出主题：`light` / `dark` / `sepia`
+
+**示例：**
+```bash
+zujuan export                          # 导出最新抓取结果
+zujuan export 1775124770132           # 导出指定目录
+zujuan export --format markdown        # 只导出 Markdown
+zujuan export --theme dark             # 深色主题
+```
+
+### 4. 关闭浏览器
 
 ```bash
 zujuan shutup
 ```
 
-### 4. 查看/修改配置
+### 5. 查看/修改配置
 
 ```bash
 # 查看配置
@@ -59,12 +83,13 @@ zujuan config
 zujuan config -g middle      # 默认年级改为初中
 zujuan config -r hot         # 默认排序改为最热
 zujuan config -ll verbose    # 日志级别改为详细
+zujuan config --export-format both  # 默认导出格式（html/markdown/both）
 
 # 重置配置（删除配置文件，恢复代码默认值）
 zujuan config --reset
 ```
 
-### 5. 搜索知识点（SQLite 加速）
+### 6. 搜索知识点（SQLite 加速）
 
 ```bash
 # 搜索知识点（模糊匹配）
@@ -83,7 +108,7 @@ zujuan list --id zsd28279 --depth 3
 zujuan list --refresh
 ```
 
-### 6. 交互式知识点浏览器（TUI）
+### 7. 交互式知识点浏览器（TUI）
 
 ```bash
 zujuan browse                  # 启动高中知识点浏览器
@@ -101,6 +126,7 @@ src/
 ├── commands/
 │   ├── start.ts              # start 命令：启动浏览器 + 扫码登录
 │   ├── scrape.ts             # scrape 命令：抓取题目
+│   ├── export.ts             # export 命令：导出抓取结果为 HTML/Markdown
 │   ├── shutup.ts             # shutup 命令：关闭浏览器
 │   ├── config.ts             # config 命令：查看/修改配置
 │   ├── list.ts               # list 命令：搜索/查看知识点（SQLite）
@@ -108,11 +134,14 @@ src/
 ├── lib/
 │   ├── browser.ts            # BrowserManager：Playwright 浏览器生命周期管理
 │   ├── scraper.ts            # ScraperEngine：题目抓取核心逻辑
-│   ├── vision-ocr.ts         # 视觉大模型 OCR 识别封装（题目+答案）
+│   ├── vision-ocr.ts         # 视觉大模型 OCR 识别封装（题目+答案，30s 单次超时）
 │   ├── url-builder.ts        # URL 构建，按年级/题型/难度等生成目标 URL
 │   ├── config.ts             # ConfigManager：配置文件读写
 │   ├── knowledge-tree.ts     # 旧版树解析（scraper 还在用）
-│   └── knowledge-tree-sqlite.ts # SQLite 版树存储（list/browse 命令使用）
+│   ├── knowledge-tree-sqlite.ts # SQLite 版树存储（list/browse 命令使用）
+│   └── exporters/
+│       ├── html-exporter.ts   # HTML 导出（三种主题 + MathJax + 主题切换按钮）
+│       └── markdown-exporter.ts # Markdown 导出（YAML frontmatter + zip 打包）
 ├── ui/
 │   ├── index.ts              # TUI 主入口（blessed 事件循环）
 │   ├── tree.ts               # TreeState：树状态管理（展开/折叠/搜索）
@@ -138,7 +167,29 @@ src/
 7. **并行视觉 OCR** — `visionEnabled=true` 时并行调用视觉模型：
    - 题目图片 → `VisionOCRProcessor.imageToMarkdown()`（Markdown 输出，LaTeX 公式）
    - 答案图片 → `VisionOCRProcessor.answerToMarkdown()`（忽略几何图，Markdown 输出）
-8. **退出** — `browserManager.close()` + `process.exit(0)`
+   - 单次请求 30 秒超时，120 秒全局超时兜底（超时后跳过剩余 OCR 任务）
+8. **保存结果** — 输出 JSON 到 `{timestamp}/results.json`，每题图片存入 `{timestamp}/{index}/`
+
+### 输出目录结构
+
+抓取结果输出到 `./zujuan-output/{timestamp}/`（每抓取一次生成一个以时间戳命名的新目录）：
+
+```
+zujuan-output/
+└── 1775124770132/               # 时间戳目录（每次抓取自动生成）
+    ├── results.json             # 完整抓取结果（含 metadata + 每题数据）
+    ├── 001/                     # 第 1 题独立目录
+    │   ├── question.png         # 题目截图
+    │   ├── answer.png           # 答案图片
+    │   └── index.html           # HTML 展示（可选，含三种主题切换）
+    ├── 002/
+    │   ├── question.png
+    │   └── answer.png
+    ├── 001.zip                  # Markdown 打包文件（可选）
+    └── 002.zip
+```
+
+results.json 中图片路径均为相对于时间戳目录的相对路径（如 `"001/question.png"`），确保 HTML/Markdown 移动后仍可正常引用。
 
 ### URL 规则
 
@@ -168,16 +219,17 @@ src/
 - `~/.zujuan-scraper/KNOWLEDGE_TREE_HIGH.txt` — 高中知识点树文本（npm install/postinstall 时自动复制）
 - `~/.zujuan-scraper/KNOWLEDGE_TREE_MIDDLE.txt` — 初中知识点树文本
 
-抓取结果输出到 `./zujuan-output/`（项目目录下）。
+### HTML 导出主题
 
-### 注意事项
+导出的 HTML 文件内置三种主题（light / dark / sepia），通过右上角三个按钮切换，主题选择保存到 `localStorage`，刷新后保持。
 
-- `scrape` 必须在 `start` 之后执行，浏览器必须处于运行状态
-- `scrape` 会自动检测登录状态，Cookie 过期时页面顶栏会出现 `a.login-btn`，此时会退出并提示重新 `start`
-- 高中（`gzsx`）和初中（`czsx`）的 URL 前缀不同，题型码也不同
-- 答案图片通过 `src` 属性下载，不经过 Playwright，避免页面导航
-- OCR 识别使用视觉大模型（OpenAI 兼容 API），需在配置中设置 `visionApiUrl`、`visionApiKey`、`visionModel` 并将 `visionEnabled` 设为 `true`
-- `visionEnabled=false`（默认）时只下载截图，不做 OCR
+| 主题 | 背景色 | 适用场景 |
+|------|--------|----------|
+| light | `#ffffff` 白底 | 默认，打印/投影 |
+| dark | `#0f0f0f` 深色 | 夜间查看 |
+| sepia | `#f5f0e8` 米黄 | 护眼阅读 |
+
+HTML 内嵌 MathJax 3 CDN，自动渲染 LaTeX 公式（`$...$`）。
 
 ## 调试建议
 
@@ -202,6 +254,7 @@ src/
 | `order` | 默认排序 | `latest` |
 | `treeDepth` | list 默认查询深度 | `1` |
 | `logLevel` | 日志级别 | `quiet` |
+| `exportFormat` | 默认导出格式 | `both` |
 | `visionApiUrl` | 视觉模型 API 地址 | `""` |
 | `visionApiKey` | 视觉模型 API Key | `""` |
 | `visionModel` | 视觉模型名称 | `""` |
