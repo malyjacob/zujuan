@@ -8,6 +8,7 @@
 - **多维筛选**：支持按题型、难度、年份、年级、排序方式筛选题目
 - **自动登录**：扫码登录，登录状态持久化
 - **同步抓取**：题目截图 + 答案图片下载
+- **视觉 OCR**：通过视觉大模型 API 将题目图片和答案图片转为 Markdown 文字，几何示意图自动忽略
 - **示例图分离**：题目中的插图单独下载，截图时自动隐藏，保持纯文字截图
 - **持久化浏览器**：浏览器一次启动、多次抓取，减少资源占用、降低反爬风险
 - **并行下载**：多张答案图片、示例图同时下载，全程非阻塞
@@ -352,6 +353,10 @@ zujuan browse -i zsd28279
 | `order` | `"latest" \| "hot" \| "comprehensive"` | 默认排序 | `"latest"` |
 | `treeDepth` | `number` | list 命令默认最大查询深度 | `1` |
 | `logLevel` | `"quiet" \| "normal" \| "verbose"` | 默认日志级别 | `"quiet"` |
+| `visionApiUrl` | `string` | 视觉模型 API 地址（如 OpenAI 兼容端点） | `""` |
+| `visionApiKey` | `string` | 视觉模型 API Key | `""` |
+| `visionModel` | `string` | 视觉模型名称 | `""` |
+| `visionEnabled` | `boolean` | 是否启用视觉 OCR | `false` |
 
 **隐藏配置项**（不暴露在 `config` 命令中）：`cookie`、`browserPort`、`headless`、`logEnabled`
 
@@ -397,6 +402,8 @@ zujuan-output/
       "difficulty": "较难",
       "scoreRate": 0.45,
       "knowledgeKeywords": ["函数", "单调性", "极值"],
+      "questionText": "## 题目\n设函数 $f(x) = x^3 - 3x + 1$...",
+      "answerText": "【答案】\n【分析】...\n【详解】...",
       "timestamp": "2026-03-27T10:30:00.000Z"
     },
     {
@@ -407,6 +414,8 @@ zujuan-output/
       "difficulty": "容易",
       "scoreRate": 0.88,
       "knowledgeKeywords": ["函数的奇偶性"],
+      "questionText": "## 题目\n判断函数 $f(x) = x^2$ 的奇偶性...",
+      "answerText": "【答案】偶函数\n【分析】...\n【详解】...",
       "timestamp": "2026-03-27T10:30:02.000Z"
     }
   ]
@@ -454,7 +463,8 @@ zujuan-output/
 1. `connect()` — 通过 CDP 连接到已运行的浏览器
 2. 设置视口 1920×1080，访问目标 URL
 3. 滚动加载所有题目（触发懒加载）
-4. 逐题处理：
+4. 检查登录状态（`a.login-btn` 元素是否存在），未登录则退出并提示重新 `start`
+5. 逐题处理：
    - 滚动到题目位置
    - 从 `div.ques-additional` 提取每题元数据（来源/题型/难度/得分率/知识点关键词）
    - 收集 `div.exam-item__cnt > p img` 示例图 URL，设为 `hidden`（不占位）
@@ -463,8 +473,9 @@ zujuan-output/
    - 轮询获取答案 img src
    - **并行下载**所有答案图片
    - **并行下载**所有示例图
-5. 保存 JSON 结果
-6. `close()` 关闭连接 + `process.exit(0)` 退出进程
+   - **并行视觉 OCR**（`visionEnabled=true` 时）：题目图片调用 `imageToMarkdown`，答案图片调用 `answerToMarkdown`（忽略几何图）
+6. 保存 JSON 结果
+7. `close()` 关闭连接 + `process.exit(0)` 退出进程
 
 ---
 

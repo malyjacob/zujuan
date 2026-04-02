@@ -9,6 +9,11 @@ export interface ConfigOptions {
   order?: Order;
   treeDepth?: number;
   logLevel?: LogLevel;
+  // 视觉 OCR 选项
+  visionApiUrl?: string;
+  visionApiKey?: string;
+  visionModel?: string;
+  visionEnabled?: boolean;
   // 隐藏选项（代码内部使用，不暴露给 config 命令）
   cookie?: string;
   browserPort?: number;
@@ -27,6 +32,11 @@ export interface Config {
   order: Order;
   treeDepth: number;
   logLevel: LogLevel;
+  // 视觉 OCR 选项
+  visionApiUrl: string;
+  visionApiKey: string;
+  visionModel: string;
+  visionEnabled: boolean;
   // 隐藏选项
   cookie: string;
   browserPort: number;
@@ -106,6 +116,8 @@ export interface ScrapeResult {
   difficulty?: string;        // 难度
   scoreRate?: number;         // 得分率（0~1）
   knowledgeKeywords: string[]; // 涉及到的知识点关键词列表
+  questionText?: string;       // 视觉模型识别的题目文字（Markdown 格式）
+  answerText?: string;         // 视觉模型识别的答案文字（Markdown 格式，忽略几何图）
   timestamp: string;
 }
 

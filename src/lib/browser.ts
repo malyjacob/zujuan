@@ -3,7 +3,6 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { spawn, ChildProcess } from 'child_process';
 import * as http from 'http';
-import terminalImage from 'terminal-image';
 import { configManager, getConfigDir, autoDetectBrowser } from './config';
 import { BrowserState } from '../types';
 
@@ -485,11 +484,7 @@ export class BrowserManager {
           fs.mkdirSync(loginQrDir, { recursive: true });
         }
         await qrcode.screenshot({ path: qrCodePath });
-        try {
-          console.log('\n' + await terminalImage.file(qrCodePath, { width: 30 }) + '\n');
-        } catch {
-          console.log(`\n二维码已保存到: ${qrCodePath}\n`);
-        }
+        console.log(`\n二维码已保存到: ${qrCodePath}\n`);
       }
 
       console.log('请打开手机微信扫码登录（60秒内）...');
@@ -587,6 +582,16 @@ export class BrowserManager {
 
   isConnected(): boolean {
     return this.browser !== null;
+  }
+
+  async isLoggedIn(): Promise<boolean> {
+    if (!this.page) return false;
+    try {
+      const loginBtn = await this.page.$('body > header > div.top-bar > div > nav > ul > li.item.user-entry > a.login-btn');
+      return loginBtn === null;
+    } catch {
+      return false;
+    }
   }
 
   isRunning(): boolean {

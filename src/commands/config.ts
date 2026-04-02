@@ -15,6 +15,10 @@ export function createConfigCommand(): Command {
     .option('-r, --order <order>', '设置默认排序: latest=最新 hot=最热 comprehensive=综合')
     .option('-d, --depth <n>', '设置 list 命令默认最大查询深度')
     .option('-ll, --log-level <level>', '设置日志级别: quiet=纯净 normal=普通 verbose=详细')
+    .option('--vision-api-url <url>', '设置视觉模型 API 地址（如 https://api.deepseek.com/v1）')
+    .option('--vision-api-key <key>', '设置视觉模型 API Key')
+    .option('--vision-model <model>', '设置视觉模型名称/ID（如 deepseek-chat）')
+    .option('--vision-enabled', '启用视觉 OCR')
     .action((options) => {
       // --reset：删除配置，恢复默认值
       if (options.reset) {
@@ -33,7 +37,11 @@ export function createConfigCommand(): Command {
         options.grade ||
         options.order ||
         options.depth !== undefined ||
-        options.logLevel;
+        options.logLevel ||
+        options.visionApiUrl ||
+        options.visionApiKey ||
+        options.visionModel ||
+        options.visionEnabled;
 
       if (!anyOptionProvided) {
         // 无参数：显示当前配置
@@ -53,6 +61,10 @@ export function createConfigCommand(): Command {
         order: options.order as 'latest' | 'hot' | 'comprehensive' | undefined,
         treeDepth: options.depth !== undefined ? parseInt(options.depth) : undefined,
         logLevel: options.logLevel as 'quiet' | 'normal' | 'verbose' | undefined,
+        visionApiUrl: options.visionApiUrl,
+        visionApiKey: options.visionApiKey,
+        visionModel: options.visionModel,
+        visionEnabled: options.visionEnabled,
       });
 
       console.log('配置已更新');

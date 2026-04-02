@@ -130,6 +130,10 @@ function buildDefaultConfig(): Config {
     order: 'latest',
     treeDepth: 1,
     logLevel: 'quiet',
+    visionApiUrl: '',
+    visionApiKey: '',
+    visionModel: '',
+    visionEnabled: false,
     cookie: '',
     browserPort: 9222,
     headless: false,
@@ -158,6 +162,7 @@ export class ConfigManager {
         const validKeys: (keyof Config)[] = [
           'browserDir', 'loginQrDir', 'logDir', 'treeDb',
           'grade', 'order', 'treeDepth', 'logLevel',
+          'visionApiUrl', 'visionApiKey', 'visionModel', 'visionEnabled',
           'cookie', 'browserPort', 'headless', 'logEnabled',
         ];
         const merged = { ...defaults };
@@ -220,6 +225,10 @@ export class ConfigManager {
     if (options.order !== undefined) this.config.order = options.order;
     if (options.treeDepth !== undefined) this.config.treeDepth = options.treeDepth;
     if (options.logLevel !== undefined) this.config.logLevel = options.logLevel;
+    if (options.visionApiUrl !== undefined) this.config.visionApiUrl = options.visionApiUrl;
+    if (options.visionApiKey !== undefined) this.config.visionApiKey = options.visionApiKey;
+    if (options.visionModel !== undefined) this.config.visionModel = options.visionModel;
+    if (options.visionEnabled !== undefined) this.config.visionEnabled = options.visionEnabled;
     if (options.cookie !== undefined) this.config.cookie = options.cookie;
     if (options.browserPort !== undefined) this.config.browserPort = options.browserPort;
     if (options.headless !== undefined) this.config.headless = options.headless;

@@ -21,6 +21,8 @@ interface QuestionTask {
   difficulty?: string;
   scoreRate?: number;
   knowledgeKeywords: string[];
+  questionText?: string;
+  answerText?: string;
 }
 
 export class ScraperEngine {
@@ -86,6 +88,13 @@ export class ScraperEngine {
     await this.page!.setViewportSize({ width: 1920, height: 1080 });
     await this.page!.goto(url, { waitUntil: 'domcontentloaded' });
     await this.page!.waitForTimeout(3000);
+
+    const loggedIn = await browserManager.isLoggedIn();
+    if (!loggedIn) {
+      console.error('登录状态已失效，请重新运行 start 命令登录');
+      await browserManager.shutdown();
+      process.exit(1);
+    }
 
     await this.scrollToLoadQuestions();
 
@@ -283,7 +292,31 @@ export class ScraperEngine {
     }
     await Promise.all(imageDownloadPromises);
 
-    // 第四步：构建结果
+    // 第四步：并行视觉 OCR（所有截图完成后一次性并发调用，不阻塞截图流程）
+    if (configManager.get('visionEnabled')) {
+      logger.log('verbose', '开始并行视觉 OCR...');
+      const { visionOCRProcessor } = await import('./vision-ocr');
+      const ocrPromises = tasks.map(async (t) => {
+        try {
+          t.questionText = await visionOCRProcessor.imageToMarkdown(t.questionPath);
+          logger.log('verbose', `${t.id}: 题目视觉 OCR 完成`);
+        } catch (error) {
+          logger.log('normal', `${t.id}: 题目视觉 OCR 失败 — ${error}`);
+        }
+
+        if (t.answerSrc && fs.existsSync(t.answerPath)) {
+          try {
+            t.answerText = await visionOCRProcessor.answerToMarkdown(t.answerPath);
+            logger.log('verbose', `${t.id}: 答案视觉 OCR 完成`);
+          } catch (error) {
+            logger.log('normal', `${t.id}: 答案视觉 OCR 失败 — ${error}`);
+          }
+        }
+      });
+      await Promise.all(ocrPromises);
+    }
+
+    // 第五步：构建结果
     const results: ScrapeResult[] = tasks.map((t) => ({
       id: t.id,
       questionPath: t.questionPath,
@@ -293,6 +326,8 @@ export class ScraperEngine {
       ...(t.questionType ? { questionType: t.questionType } : {}),
       ...(t.difficulty ? { difficulty: t.difficulty } : {}),
       ...(t.scoreRate !== undefined ? { scoreRate: t.scoreRate } : {}),
+      ...(t.questionText ? { questionText: t.questionText } : {}),
+      ...(t.answerText ? { answerText: t.answerText } : {}),
       knowledgeKeywords: t.knowledgeKeywords,
       timestamp: new Date().toISOString(),
     }));

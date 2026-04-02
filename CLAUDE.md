@@ -4,9 +4,9 @@
 
 ## 项目概述
 
-**用途**：从组卷网（zujuan.xkw.com）抓取初高中数学题目截图、答案图片和 OCR 识别文字。
+**用途**：从组卷网（zujuan.xkw.com）抓取初高中数学题目截图、答案图片和视觉模型 OCR 识别文字。
 
-**语言**：TypeScript + Node.js，依赖 Playwright（浏览器自动化）和 Tesseract.js（OCR）。
+**语言**：TypeScript + Node.js，依赖 Playwright（浏览器自动化）和 OpenAI 兼容视觉模型（OCR）。
 
 ## 核心命令
 
@@ -108,7 +108,7 @@ src/
 ├── lib/
 │   ├── browser.ts            # BrowserManager：Playwright 浏览器生命周期管理
 │   ├── scraper.ts            # ScraperEngine：题目抓取核心逻辑
-│   ├── ocr.ts                # Tesseract.js OCR 识别封装
+│   ├── vision-ocr.ts         # 视觉大模型 OCR 识别封装（题目+答案）
 │   ├── url-builder.ts        # URL 构建，按年级/题型/难度等生成目标 URL
 │   ├── config.ts             # ConfigManager：配置文件读写
 │   ├── knowledge-tree.ts     # 旧版树解析（scraper 还在用）
@@ -127,15 +127,18 @@ src/
 
 1. **连接浏览器** — `browserManager.connect()` 通过 CDP 连接到已运行的 Chrome
 2. **访问 URL** — 视口设为 1920×1080，访问 `UrlBuilder` 生成的目标 URL
-3. **滚动加载** — 滚动到底部触发懒加载，等待题目列表完整渲染
-4. **批量截图** — 用 `$$` 获取所有 `div.tk-quest-item.quesroot` 句柄，逐题处理：
+3. **登录检测** — 检查页面顶栏 `a.login-btn` 是否存在，存在则说明未登录/登录已过期，退出并提示重新 `start`
+4. **滚动加载** — 滚动到底部触发懒加载，等待题目列表完整渲染
+5. **批量截图** — 用 `$$` 获取所有 `div.tk-quest-item.quesroot` 句柄，逐题处理：
    - 滚动到题目位置
    - 截取 `div.exam-item__cnt`（仅题目内容区域）
    - 点击 `div.wrapper.quesdiv` 触发答案图片懒加载
    - 轮询等待答案 `img` 的 `src` 出现
-5. **并行下载** — 收集完所有答案 URL 后，用 Node.js 原生 `http`/`https` 并行下载（不通过 Playwright，避免页面导航）
-6. **并行 OCR** — 并行调用 Tesseract.js 识别题目和答案图片
-7. **退出** — `browserManager.close()` + `process.exit(0)`
+6. **并行下载** — 收集完所有答案 URL 后，用 Node.js 原生 `http`/`https` 并行下载（不通过 Playwright，避免页面导航）
+7. **并行视觉 OCR** — `visionEnabled=true` 时并行调用视觉模型：
+   - 题目图片 → `VisionOCRProcessor.imageToMarkdown()`（Markdown 输出，LaTeX 公式）
+   - 答案图片 → `VisionOCRProcessor.answerToMarkdown()`（忽略几何图，Markdown 输出）
+8. **退出** — `browserManager.close()` + `process.exit(0)`
 
 ### URL 规则
 
@@ -170,9 +173,11 @@ src/
 ### 注意事项
 
 - `scrape` 必须在 `start` 之后执行，浏览器必须处于运行状态
+- `scrape` 会自动检测登录状态，Cookie 过期时页面顶栏会出现 `a.login-btn`，此时会退出并提示重新 `start`
 - 高中（`gzsx`）和初中（`czsx`）的 URL 前缀不同，题型码也不同
 - 答案图片通过 `src` 属性下载，不经过 Playwright，避免页面导航
-- OCR 识别使用 Tesseract.js，本地执行，无需 API Key
+- OCR 识别使用视觉大模型（OpenAI 兼容 API），需在配置中设置 `visionApiUrl`、`visionApiKey`、`visionModel` 并将 `visionEnabled` 设为 `true`
+- `visionEnabled=false`（默认）时只下载截图，不做 OCR
 
 ## 调试建议
 
@@ -197,5 +202,9 @@ src/
 | `order` | 默认排序 | `latest` |
 | `treeDepth` | list 默认查询深度 | `1` |
 | `logLevel` | 日志级别 | `quiet` |
+| `visionApiUrl` | 视觉模型 API 地址 | `""` |
+| `visionApiKey` | 视觉模型 API Key | `""` |
+| `visionModel` | 视觉模型名称 | `""` |
+| `visionEnabled` | 是否启用视觉 OCR | `false` |
 
 隐藏配置项（不暴露在 `config` 命令中）：`cookie`、`browserPort`、`headless`、`logEnabled`

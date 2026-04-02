@@ -26,9 +26,8 @@
     "better-sqlite3": "^12.8.0",
     "blessed": "^0.1.81",
     "commander": "^12.0.0",
-    "playwright": "^1.40.0",
-    "terminal-image": "^4.2.0",
-    "tesseract.js": "^5.0.0"
+    "openai": "^4.0.0",
+    "playwright": "^1.40.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
