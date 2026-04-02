@@ -92,8 +92,8 @@ export function createScrapeCommand(): Command {
 
   /** 根据参数/配置决定导出格式和主题，并执行 */
   async function runExport(output: ScrapeOutput, opts: { format?: string; theme?: string }): Promise<void> {
-    // format：命令行 > config > headless 推导 > 默认 html
-    let fmt: 'html' | 'markdown' | 'both' = 'html';
+    // format：命令行 > config > 默认 both
+    let fmt: 'html' | 'markdown' | 'both' = 'both';
     if (opts.format) {
       const parts = (opts.format as string).split(',').map(s => s.trim());
       if (parts.includes('html') && parts.includes('markdown')) {
@@ -107,9 +107,6 @@ export function createScrapeCommand(): Command {
       const cfgFmt = configManager.get('exportFormat');
       if (cfgFmt) {
         fmt = cfgFmt;
-      } else {
-        const headless = configManager.get('headless');
-        fmt = headless ? 'markdown' : 'html';
       }
     }
 

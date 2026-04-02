@@ -61,8 +61,8 @@ export function createExportCommand(): Command {
         process.exit(1);
       }
 
-      // 解析 format：命令行 > config > headless 推导 > 默认 html
-      let fmt: 'html' | 'markdown' | 'both' = 'html';
+      // 解析 format：命令行 > config > 默认 both
+      let fmt: 'html' | 'markdown' | 'both' = 'both';
       if (options.format) {
         const parts = (options.format as string).split(',').map(s => s.trim());
         if (parts.includes('html') && parts.includes('markdown')) {
@@ -78,9 +78,6 @@ export function createExportCommand(): Command {
         const cfgFmt = configManager.get('exportFormat');
         if (cfgFmt) {
           fmt = cfgFmt;
-        } else {
-          const headless = configManager.get('headless');
-          fmt = headless ? 'markdown' : 'html';
         }
       }
 

@@ -134,7 +134,7 @@ function buildDefaultConfig(): Config {
     visionApiKey: '',
     visionModel: '',
     visionEnabled: false,
-    exportFormat: 'html',
+    exportFormat: 'both',
     cookie: '',
     browserPort: 9222,
     headless: false,
