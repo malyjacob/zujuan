@@ -1,6 +1,7 @@
 import { chromium, Browser, Page, BrowserContext } from 'playwright';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 import { spawn, ChildProcess } from 'child_process';
 import * as http from 'http';
 import { configManager, getConfigDir, autoDetectBrowser } from './config';
@@ -267,14 +268,15 @@ export class BrowserManager {
       );
     }
 
+    const isWin = os.platform() === 'win32';
     const args = [
       headless ? '--headless' : '',
       `--remote-debugging-port=${port}`,
       '--no-first-run',
       '--no-default-browser-check',
-      '--disable-dev-shm-usage',
+      isWin ? '' : '--disable-dev-shm-usage',
       '--no-sandbox',
-      `--user-data-dir=/tmp/zujuan-chrome-${port}`
+      `--user-data-dir=${path.join(os.tmpdir(), `zujuan-chrome-${port}`)}`
     ].filter(Boolean);
 
     writeLog(`启动 Chromium: ${chromiumPath}`);
