@@ -178,13 +178,14 @@ src/
 zujuan-output/
 └── 1775124770132/               # 时间戳目录（每次抓取自动生成）
     ├── results.json             # 完整抓取结果（含 metadata + 每题数据）
+    ├── index.html               # 总览导航页（HTML 导出时生成，含所有题目入口）
     ├── 001/                     # 第 1 题独立目录
     │   ├── question.png         # 题目截图
     │   ├── answer.png           # 答案图片
-    │   └── index.html           # HTML 展示（可选，含三种主题切换）
+    │   └── index.html           # HTML 展示（含三种主题切换 + 上下题导航）
     ├── 002/
     │   ├── question.png
-    │   └── answer.png
+    │   └── index.html
     ├── 001.zip                  # Markdown 打包文件（可选）
     └── 002.zip
 ```
@@ -230,6 +231,10 @@ results.json 中图片路径均为相对于时间戳目录的相对路径（如 
 | sepia | `#f5f0e8` 米黄 | 护眼阅读 |
 
 HTML 内嵌 MathJax 3 CDN，自动渲染 LaTeX 公式（`$...$`）。
+
+**总览导航页**：`{timestamp}/index.html` 为总览导航页，展示所有题目的序号、难度、得分率、知识点关键词列表，点击跳转到对应单题页。
+
+**上下题导航**：每道题 HTML 页面底部有「← 上一题 | 目录 | 下一题 →」导航栏，首尾题对应按钮为禁用状态。
 
 ## 调试建议
 

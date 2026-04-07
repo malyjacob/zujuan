@@ -92,9 +92,16 @@ export function createExportCommand(): Command {
       const { options: meta, results } = output;
       let htmlCount = 0, mdCount = 0, zipCount = 0;
 
-      for (const result of results) {
+      // 导出时建立索引映射，便于确定上下题
+      const indexMap = results.map(r => r.index);
+
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i];
+        const prevIndex = i > 0 ? indexMap[i - 1] : undefined;
+        const nextIndex = i < results.length - 1 ? indexMap[i + 1] : undefined;
+
         if (fmt === 'html' || fmt === 'both') {
-          htmlExporter.export(batchDir, result, theme);
+          htmlExporter.export(batchDir, result, theme, prevIndex, nextIndex);
           console.log(`  ✓ ${result.index}/index.html`);
           htmlCount++;
         }
@@ -111,6 +118,12 @@ export function createExportCommand(): Command {
           }
           mdCount++;
         }
+      }
+
+      // 生成总览页
+      if (fmt === 'html' || fmt === 'both') {
+        htmlExporter.exportOverview(batchDir, results, meta, theme);
+        console.log(`  ✓ index.html (总览)`);
       }
 
       console.log(`\n完成: 生成 ${htmlCount} 个 HTML，${mdCount} 个 Markdown，${zipCount} 个 ZIP`);
