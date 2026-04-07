@@ -118,9 +118,16 @@ export function createScrapeCommand(): Command {
 
     let htmlCount = 0, mdCount = 0, zipCount = 0;
 
-    for (const result of results) {
+    // 建立索引映射，便于确定上下题
+    const indexMap = results.map(r => r.index);
+
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i];
+      const prevIndex = i > 0 ? indexMap[i - 1] : undefined;
+      const nextIndex = i < results.length - 1 ? indexMap[i + 1] : undefined;
+
       if (fmt === 'html' || fmt === 'both') {
-        htmlExporter.export(batchDir, result, theme);
+        htmlExporter.export(batchDir, result, theme, prevIndex, nextIndex);
         logger.log('normal', `  ✓ ${result.index}/index.html`);
         htmlCount++;
       }
@@ -136,6 +143,12 @@ export function createScrapeCommand(): Command {
           logger.error(`  ✗ ${result.index}.zip 打包失败:`, err);
         }
       }
+    }
+
+    // 生成总览页
+    if (fmt === 'html' || fmt === 'both') {
+      htmlExporter.exportOverview(batchDir, results, meta, theme);
+      logger.log('normal', `  ✓ index.html (总览)`);
     }
 
     logger.log('normal', `导出完成: ${htmlCount} HTML, ${mdCount} Markdown, ${zipCount} ZIP`);
