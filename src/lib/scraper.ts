@@ -240,6 +240,8 @@ export class ScraperEngine {
           logger.log('verbose', `第 ${i + 1}/${count}: 额外信息 — 来源:${extraInfo.source} 题型:${extraInfo.questionType} 难度:${extraInfo.difficulty} 得分率:${extraInfo.scoreRate} 关键词:${extraInfo.knowledgeKeywords.join(',')}`);
         }
 
+        await cntHandle.scrollIntoViewIfNeeded();
+        await this.page!.waitForTimeout(120);
         await cntHandle.screenshot({ path: questionPath });
         logger.log('verbose', `第 ${i + 1}/${count}: 题目截图完成`);
 
