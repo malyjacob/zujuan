@@ -147,6 +147,7 @@ src/
 │   ├── vision-ocr.ts         # 视觉大模型 OCR 识别封装（题目+答案，30s 单次超时）
 │   ├── url-builder.ts        # URL 构建，按年级/题型/难度等生成目标 URL
 │   ├── config.ts             # ConfigManager：配置文件读写
+│   ├── discord-notifier.ts   # Discord Webhook 通知：扫码登录时发送二维码
 │   ├── knowledge-tree.ts     # 旧版树解析（保留）
 │   ├── knowledge-tree-sqlite.ts # SQLite 版树存储（list/browse/serve 使用）
 │   └── exporters/
@@ -271,6 +272,7 @@ HTML 内嵌 MathJax 3 CDN，自动渲染 LaTeX 公式（`$...$`）。
 | `logLevel` | 日志级别 | `quiet` |
 | `exportFormat` | 默认导出格式 | `both` |
 | `outputDir` | 抓取结果输出目录 | `~/.zujuan-output/` |
+| `qrNotifyDiscord` | Discord Webhook URL，扫码登录时发送二维码 | `""` |
 | `visionApiUrl` | 视觉模型 API 地址 | `""` |
 | `visionApiKey` | 视觉模型 API Key | `""` |
 | `visionModel` | 视觉模型名称 | `""` |

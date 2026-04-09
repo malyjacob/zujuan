@@ -136,6 +136,7 @@ function buildDefaultConfig(): Config {
     visionEnabled: false,
     exportFormat: 'both',
     outputDir: path.join(os.homedir(), 'zujuan-output'),
+    qrNotifyDiscord: '',
     cookie: '',
     browserPort: 9222,
     headless: false,
@@ -165,7 +166,7 @@ export class ConfigManager {
           'browserDir', 'loginQrDir', 'logDir', 'treeDb',
           'grade', 'order', 'treeDepth', 'logLevel',
           'visionApiUrl', 'visionApiKey', 'visionModel', 'visionEnabled',
-          'exportFormat', 'outputDir',
+          'exportFormat', 'outputDir', 'qrNotifyDiscord',
           'cookie', 'browserPort', 'headless', 'logEnabled',
         ];
         const merged = { ...defaults };
@@ -234,6 +235,7 @@ export class ConfigManager {
     if (options.visionEnabled !== undefined) this.config.visionEnabled = options.visionEnabled;
     if (options.exportFormat !== undefined) this.config.exportFormat = options.exportFormat;
     if (options.outputDir !== undefined) this.config.outputDir = options.outputDir;
+    if (options.qrNotifyDiscord !== undefined) this.config.qrNotifyDiscord = options.qrNotifyDiscord;
     if (options.cookie !== undefined) this.config.cookie = options.cookie;
     if (options.browserPort !== undefined) this.config.browserPort = options.browserPort;
     if (options.headless !== undefined) this.config.headless = options.headless;

@@ -264,6 +264,7 @@ zujuan config --reset
 | `--vision-api-key <key>` | 设置视觉模型 API Key | `""` |
 | `--vision-model <model>` | 设置视觉模型名称 | `""` |
 | `--vision-enabled` | 启用视觉 OCR | （默认关闭） |
+| `--qr-notify-discord <webhookUrl>` | 设置 Discord Webhook URL，扫码登录时自动发送二维码到 Discord | `""` |
 
 > 隐藏配置项（不暴露在帮助文本中，但可通过 `config --reset` 恢复默认值）：`cookie`、`browserPort`、`headless`、`logEnabled`
 
@@ -287,6 +288,9 @@ zujuan config --vision-api-url "https://openrouter.ai/api/v1" \
   --vision-api-key "sk-or-v1-xxx" \
   --vision-model "qwen/qwen3-vl-32b-instruct" \
   --vision-enabled
+
+# 配置 Discord 二维码通知（扫码登录时自动发送二维码到 Discord 频道）
+zujuan config --qr-notify-discord "https://discord.com/api/webhooks/xxx/yyy"
 
 # 重置所有配置为默认值
 zujuan config --reset
@@ -455,6 +459,7 @@ zujuan serve --port 3000
 | `visionApiKey` | `string` | 视觉模型 API Key | `""` |
 | `visionModel` | `string` | 视觉模型名称 | `""` |
 | `visionEnabled` | `boolean` | 是否启用视觉 OCR | `false` |
+| `qrNotifyDiscord` | `string` | Discord Webhook URL，扫码登录时自动发送二维码 | `""` |
 
 **隐藏配置项**（不暴露在 `config` 命令中）：`cookie`、`browserPort`、`headless`、`logEnabled`
 

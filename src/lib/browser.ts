@@ -6,6 +6,7 @@ import { spawn, ChildProcess } from 'child_process';
 import * as http from 'http';
 import { configManager, getConfigDir, autoDetectBrowser } from './config';
 import { BrowserState } from '../types';
+import { sendQrCodeToDiscord } from './discord-notifier';
 
 const STORAGE_STATE_FILE = path.join(getConfigDir(), 'storage-state.json');
 const BROWSER_STATE_FILE = path.join(getConfigDir(), '.browser-state.json');
@@ -487,6 +488,9 @@ export class BrowserManager {
         }
         await qrcode.screenshot({ path: qrCodePath });
         console.log(`\n二维码已保存到: ${qrCodePath}\n`);
+
+        // 发送 Discord 通知（静默失败，不阻塞流程）
+        sendQrCodeToDiscord(qrCodePath);
       }
 
       console.log('请打开手机微信扫码登录（60秒内）...');

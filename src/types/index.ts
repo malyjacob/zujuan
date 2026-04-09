@@ -18,6 +18,8 @@ export interface ConfigOptions {
   exportFormat?: ExportFormat;
   // 输出目录选项
   outputDir?: string;
+  // 二维码通知选项
+  qrNotifyDiscord?: string;
   // 隐藏选项（代码内部使用，不暴露给 config 命令）
   cookie?: string;
   browserPort?: number;
@@ -45,6 +47,8 @@ export interface Config {
   exportFormat: ExportFormat;
   // 输出目录选项
   outputDir: string;
+  // 二维码通知选项
+  qrNotifyDiscord: string;
   // 隐藏选项
   cookie: string;
   browserPort: number;

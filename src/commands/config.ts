@@ -21,6 +21,7 @@ export function createConfigCommand(): Command {
     .option('--vision-enabled', '启用视觉 OCR')
     .option('--export-format <format>', '设置导出格式: html / markdown / both')
     .option('--output-dir <path>', '设置抓取结果输出目录（默认: ~/.zujuan-output/）')
+    .option('--qr-notify-discord <webhookUrl>', '设置 Discord Webhook URL，扫码登录时自动发送二维码通知')
     .action((options) => {
       // --reset：删除配置，恢复默认值
       if (options.reset) {
@@ -45,7 +46,8 @@ export function createConfigCommand(): Command {
         options.visionModel ||
         options.visionEnabled ||
         options.exportFormat ||
-        options.outputDir;
+        options.outputDir ||
+        options.qrNotifyDiscord !== undefined;
 
       if (!anyOptionProvided) {
         // 无参数：显示当前配置
@@ -71,6 +73,7 @@ export function createConfigCommand(): Command {
         visionEnabled: options.visionEnabled,
         exportFormat: options.exportFormat as 'html' | 'markdown' | 'both' | undefined,
         outputDir: options.outputDir,
+        qrNotifyDiscord: options.qrNotifyDiscord,
       });
 
       console.log('配置已更新');
