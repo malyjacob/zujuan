@@ -8,6 +8,7 @@ import { createScrapeCommand } from './commands/scrape';
 import { createListCommand } from './commands/list';
 import { createBrowseCommand } from './commands/browse';
 import { createExportCommand } from './commands/export';
+import { createServeCommand } from './commands/serve';
 
 const program = new Command();
 
@@ -24,5 +25,6 @@ program.addCommand(createScrapeCommand());
 program.addCommand(createListCommand());
 program.addCommand(createBrowseCommand());
 program.addCommand(createExportCommand());
+program.addCommand(createServeCommand());
 
 program.parse(process.argv);

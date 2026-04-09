@@ -7,7 +7,7 @@ import { browserManager } from './browser';
 import { logger } from './logger';
 import { ScrapeResult, ScrapeOptions, ScrapeMeta, ScrapeOutput } from '../types';
 import { configManager } from './config';
-import { findNodeById, loadKnowledgeTree } from './knowledge-tree';
+import { getNodeById, ensureDatabase } from './knowledge-tree-sqlite';
 
 interface QuestionTask {
   id: string;
@@ -62,15 +62,14 @@ export class ScraperEngine {
     );
 
     // 构建顶层筛选条件（提前构建，无题目时也需返回）
-    const gradeLabel = grade === 'high' ? '高中' : '初中';
-    const tree = loadKnowledgeTree(gradeLabel);
-    const node = findNodeById(tree, knowledge);
+    ensureDatabase();
+    const node = getNodeById(knowledge, grade as 'high' | 'middle');
     const knowledgePoint = node?.name || knowledge;
     const meta: ScrapeMeta = {
       timestamp: '',
       knowledgeId: knowledge,
       knowledgePoint,
-      grade: gradeLabel,
+      grade: grade as string,
       order: (order ? { latest: '最新', hot: '最热', comprehensive: '综合' }[order] : '最新') as string,
     };
     if (type) {
@@ -100,7 +99,7 @@ export class ScraperEngine {
 
     await this.scrollToLoadQuestions();
 
-    const outputDir = path.resolve('./zujuan-output');
+    const outputDir = path.resolve(configManager.get('outputDir'));
     const timestamp = Date.now().toString();
     const batchDir = path.join(outputDir, timestamp);
     meta.timestamp = timestamp;

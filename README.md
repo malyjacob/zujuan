@@ -186,7 +186,7 @@ zujuan export [timestamp] [options]
 
 | 参数 | 说明 |
 |------|------|
-| `timestamp` | 抓取结果目录名（timestamp），省略时自动查找 `./zujuan-output/` 下最新的目录 |
+| `timestamp` | 抓取结果目录名（timestamp），省略时自动查找 `outputDir` 下最新的目录 |
 
 **选项：**
 
@@ -259,6 +259,7 @@ zujuan config --reset
 | `-d, --depth <n>` | 设置 list 命令默认最大查询深度 | `1` |
 | `-ll, --log-level <level>` | 设置日志级别：`quiet`/`normal`/`verbose` | `quiet` |
 | `--export-format <format>` | 设置导出格式：`html`/`markdown`/`both` | `both` |
+| `--output-dir <path>` | 设置抓取结果输出目录 | `~/.zujuan-output/` |
 | `--vision-api-url <url>` | 设置视觉模型 API 地址 | `""` |
 | `--vision-api-key <key>` | 设置视觉模型 API Key | `""` |
 | `--vision-model <model>` | 设置视觉模型名称 | `""` |
@@ -384,6 +385,42 @@ zujuan browse -i zsd28279
 
 ---
 
+### serve 命令
+
+启动静态服务器，在浏览器中展示所有历史抓取结果。
+
+```bash
+zujuan serve [options]
+```
+
+**选项：**
+
+| 选项 | 说明 | 默认值 |
+|------|------|--------|
+| `-p, --port <port>` | 监听端口 | `30888` |
+
+**功能说明：**
+
+- 扫描 `outputDir` 下所有包含总览页（`index.html`）的时间戳目录
+- 按时间倒序展示卡片列表，显示知识点名称、年级、题型、难度、抓取时间
+- 点击卡片跳转到对应的时间戳总览页
+- 总览页左上角有「← 返回目录」链接，可返回列表页
+- 列表页支持分页（每页 20 条），URL 参数 `?page=N` 翻页
+
+**示例：**
+
+```bash
+# 启动服务（默认端口 30888）
+zujuan serve
+
+# 指定端口
+zujuan serve --port 3000
+```
+
+按 `Ctrl+C` 关闭服务。
+
+---
+
 ## 配置
 
 所有用户数据统一存储在 `~/.zujuan-scraper/` 目录下：
@@ -413,6 +450,7 @@ zujuan browse -i zsd28279
 | `treeDepth` | `number` | list 命令默认最大查询深度 | `1` |
 | `logLevel` | `"quiet" \| "normal" \| "verbose"` | 默认日志级别 | `"quiet"` |
 | `exportFormat` | `"html" \| "markdown" \| "both"` | 默认导出格式 | `"both"` |
+| `outputDir` | `string` | 抓取结果输出目录 | `~/.zujuan-output/` |
 | `visionApiUrl` | `string` | 视觉模型 API 地址 | `""` |
 | `visionApiKey` | `string` | 视觉模型 API Key | `""` |
 | `visionModel` | `string` | 视觉模型名称 | `""` |
@@ -424,10 +462,10 @@ zujuan browse -i zsd28279
 
 ## 输出结果
 
-抓取结果保存在 `./zujuan-output/` 目录下，按抓取时间戳组织目录：
+抓取结果保存在 `outputDir` 目录下（可通过 `zujuan config --output-dir` 修改，默认 `~/.zujuan-output/`），按抓取时间戳组织目录：
 
 ```
-zujuan-output/
+~/.zujuan-output/
 └── {timestamp}/              # 每次抓取一个时间戳目录
     ├── results.json          # 汇总结果（含每题元数据）
     ├── index.html            # 总览导航页（HTML 导出时生成）
@@ -461,7 +499,7 @@ zujuan-output/
     "timestamp": "1775124931867",
     "knowledgeId": "zsd28279",
     "knowledgePoint": "平面解析几何",
-    "grade": "高中",
+    "grade": "high",
     "order": "最新",
     "type": "解答题",
     "difficulty": "较难"
@@ -509,7 +547,7 @@ zujuan-output/
 ```
 ┌──────────────────────────────────────────────────────────┐
 │                      CLI 命令层                           │
-│  start (启动+登录) │ scrape (抓取) │ export (导出) │ shutup  │
+│  start (启动+登录) │ scrape (抓取) │ export (导出) │ serve (浏览) │ shutup  │
 └──────────┬────────────────────┬──────────────────────────┘
            │                    │
            ▼                    ▼
@@ -531,7 +569,7 @@ zujuan-output/
 │  knowledge-tree.db    知识点树 SQLite 数据库            │
 └──────────────────────────────────────────────────────────┘
 ┌──────────────────────────────────────────────────────────┐
-│                 ./zujuan-output/{timestamp}/             │
+│                 ~/.zujuan-output/{timestamp}/             │
 │  抓取结果：{index}/question.png, answer.png, img_*.png│
 │  results.json, 001.zip, 002.zip...                     │
 └──────────────────────────────────────────────────────────┘

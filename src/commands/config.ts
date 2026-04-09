@@ -20,6 +20,7 @@ export function createConfigCommand(): Command {
     .option('--vision-model <model>', '设置视觉模型名称/ID（如 deepseek-chat）')
     .option('--vision-enabled', '启用视觉 OCR')
     .option('--export-format <format>', '设置导出格式: html / markdown / both')
+    .option('--output-dir <path>', '设置抓取结果输出目录（默认: ~/.zujuan-output/）')
     .action((options) => {
       // --reset：删除配置，恢复默认值
       if (options.reset) {
@@ -43,7 +44,8 @@ export function createConfigCommand(): Command {
         options.visionApiKey ||
         options.visionModel ||
         options.visionEnabled ||
-        options.exportFormat;
+        options.exportFormat ||
+        options.outputDir;
 
       if (!anyOptionProvided) {
         // 无参数：显示当前配置
@@ -68,6 +70,7 @@ export function createConfigCommand(): Command {
         visionModel: options.visionModel,
         visionEnabled: options.visionEnabled,
         exportFormat: options.exportFormat as 'html' | 'markdown' | 'both' | undefined,
+        outputDir: options.outputDir,
       });
 
       console.log('配置已更新');

@@ -118,6 +118,15 @@ zujuan browse -i zsd28279    # 从指定节点开始浏览
 
 键盘操作：`↑↓` 移动 `←→` 展开/折叠 `/` 搜索 `n` 下一匹配 `q` 退出
 
+### 8. 静态服务器（浏览历史结果）
+
+```bash
+zujuan serve                  # 启动服务器（默认端口 30888）
+zujuan serve --port 3000      # 指定端口
+```
+
+启动后访问 http://localhost:30888 可浏览所有历史抓取结果，按时间倒序展示，点击卡片跳转到对应总览页。总览页左上角有「← 返回目录」链接。按 `Ctrl+C` 关闭服务。
+
 ## 项目结构
 
 ```
@@ -127,6 +136,7 @@ src/
 │   ├── start.ts              # start 命令：启动浏览器 + 扫码登录
 │   ├── scrape.ts             # scrape 命令：抓取题目
 │   ├── export.ts             # export 命令：导出抓取结果为 HTML/Markdown
+│   ├── serve.ts              # serve 命令：静态服务器，展示历史抓取结果
 │   ├── shutup.ts             # shutup 命令：关闭浏览器
 │   ├── config.ts             # config 命令：查看/修改配置
 │   ├── list.ts               # list 命令：搜索/查看知识点（SQLite）
@@ -137,8 +147,8 @@ src/
 │   ├── vision-ocr.ts         # 视觉大模型 OCR 识别封装（题目+答案，30s 单次超时）
 │   ├── url-builder.ts        # URL 构建，按年级/题型/难度等生成目标 URL
 │   ├── config.ts             # ConfigManager：配置文件读写
-│   ├── knowledge-tree.ts     # 旧版树解析（scraper 还在用）
-│   ├── knowledge-tree-sqlite.ts # SQLite 版树存储（list/browse 命令使用）
+│   ├── knowledge-tree.ts     # 旧版树解析（保留）
+│   ├── knowledge-tree-sqlite.ts # SQLite 版树存储（list/browse/serve 使用）
 │   └── exporters/
 │       ├── html-exporter.ts   # HTML 导出（三种主题 + MathJax + 主题切换按钮）
 │       └── markdown-exporter.ts # Markdown 导出（YAML frontmatter + zip 打包）
@@ -172,10 +182,10 @@ src/
 
 ### 输出目录结构
 
-抓取结果输出到 `./zujuan-output/{timestamp}/`（每抓取一次生成一个以时间戳命名的新目录）：
+抓取结果输出到 `outputDir/{timestamp}/`（可通过 `config --output-dir` 修改，默认 `~/.zujuan-output/`）：
 
 ```
-zujuan-output/
+~/.zujuan-output/
 └── 1775124770132/               # 时间戳目录（每次抓取自动生成）
     ├── results.json             # 完整抓取结果（含 metadata + 每题数据）
     ├── index.html               # 总览导航页（HTML 导出时生成，含所有题目入口）
@@ -232,7 +242,7 @@ results.json 中图片路径均为相对于时间戳目录的相对路径（如 
 
 HTML 内嵌 MathJax 3 CDN，自动渲染 LaTeX 公式（`$...$`）。
 
-**总览导航页**：`{timestamp}/index.html` 为总览导航页，展示所有题目的序号、难度、得分率、知识点关键词列表，点击跳转到对应单题页。
+**总览导航页**：`{timestamp}/index.html` 为总览导航页，展示所有题目的序号、难度、得分率、知识点关键词列表，点击跳转到对应单题页。左上角有「← 返回目录」链接，可跳转回 `serve` 的列表页。
 
 **上下题导航**：每道题 HTML 页面底部有「← 上一题 | 目录 | 下一题 →」导航栏，首尾题对应按钮为禁用状态。
 
@@ -260,6 +270,7 @@ HTML 内嵌 MathJax 3 CDN，自动渲染 LaTeX 公式（`$...$`）。
 | `treeDepth` | list 默认查询深度 | `1` |
 | `logLevel` | 日志级别 | `quiet` |
 | `exportFormat` | 默认导出格式 | `both` |
+| `outputDir` | 抓取结果输出目录 | `~/.zujuan-output/` |
 | `visionApiUrl` | 视觉模型 API 地址 | `""` |
 | `visionApiKey` | 视觉模型 API Key | `""` |
 | `visionModel` | 视觉模型名称 | `""` |

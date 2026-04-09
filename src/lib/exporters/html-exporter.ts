@@ -22,6 +22,124 @@ export class HtmlExporter {
     return htmlPath;
   }
 
+  /**
+   * 生成服务列表页 HTML 字符串（不分页的内存渲染版，供 serve 命令调用）。
+   * @param entries 经过分页筛选的条目
+   * @param page 当前页码
+   * @param totalPages 总页数
+   * @param totalEntries 总条目数
+   */
+  buildServeListHtml(entries: ScrapeMeta[], page: number, totalPages: number, totalEntries: number): string {
+    const css = `
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; font-size: 15px; line-height: 1.7; background: #f7f7f8; color: #1a1a1a; min-height: 100vh; }
+.container { max-width: 900px; margin: 0 auto; padding: 32px 16px 80px; }
+.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+.header h1 { font-size: 22px; font-weight: 700; color: #7c3aed; }
+.header a { font-size: 13px; color: #888; text-decoration: none; }
+.header a:hover { color: #7c3aed; }
+.card { background: #fff; border: 1px solid #e5e5e5; border-radius: 12px; overflow: hidden; }
+.card-header { padding: 16px 20px; border-bottom: 1px solid #e5e5e5; display: flex; align-items: center; justify-content: space-between; }
+.card-header h2 { font-size: 15px; font-weight: 600; color: #1a1a1a; }
+.card-header .time { font-size: 12px; color: #888; }
+.entry-list { list-style: none; }
+.entry-item { border-bottom: 1px solid #f0f0f0; }
+.entry-item:last-child { border-bottom: none; }
+.entry-item a { display: flex; align-items: center; gap: 14px; padding: 16px 20px; text-decoration: none; color: #1a1a1a; transition: background .15s; }
+.entry-item a:hover { background: #f9f7ff; }
+.entry-item a:hover .arrow { color: #7c3aed; }
+.info { flex: 1; }
+.grade { font-size: 12px; color: #888; margin-bottom: 2px; }
+.title { font-size: 15px; font-weight: 600; color: #1a1a1a; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.tag { background: #f3f0ff; border: 1px solid #ddd6fe; color: #5b21b6; font-size: 12px; padding: 2px 10px; border-radius: 20px; }
+.arrow { color: #ccc; font-size: 18px; transition: color .15s; }
+.empty { text-align: center; padding: 60px 20px; color: #888; }
+.empty p { margin-bottom: 12px; font-size: 15px; }
+.empty code { background: #f0f0f0; padding: 2px 8px; border-radius: 4px; font-size: 13px; }
+.pagination { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 24px; }
+.pagination a, .pagination span { display: inline-block; padding: 6px 14px; border-radius: 8px; font-size: 14px; text-decoration: none; }
+.pagination a { background: #f3f0ff; border: 1px solid #ddd6fe; color: #5b21b6; }
+.pagination a:hover { background: #7c3aed; color: #fff; border-color: #7c3aed; }
+.pagination .current { background: #7c3aed; color: #fff; border: 1px solid #7c3aed; }
+.pagination .disabled { opacity: 0.4; pointer-events: none; }
+.pagination .info-text { color: #888; font-size: 13px; }
+`;
+
+    if (entries.length === 0) {
+      return `<!DOCTYPE html>
+<html lang="zh">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>组卷网题目总览</title><style>${css}</style>
+</head>
+<body><div class="container">
+<div class="header"><h1>📚 组卷网题目总览</h1><a href="/">刷新</a></div>
+<div class="empty"><p>暂无抓取记录</p><p>运行 <code>zujuan scrape -k &lt;知识点ID&gt;</code> 开始抓取</p></div>
+</div></html>`;
+    }
+
+    const items = entries.map(e => {
+      const grade = e.grade === 'high' ? '高中' : '初中';
+      const timeStr = e.timestamp ? this.formatTimestamp(e.timestamp) : '';
+
+      return `<li class="entry-item">
+  <a href="/${e.timestamp}/index.html">
+    <div class="info">
+      <div class="grade">${grade} · ${timeStr}</div>
+      <div class="title">${this.escHtml(e.knowledgePoint)}</div>
+      <div class="meta">
+        ${e.type ? `<span class="tag">${this.escHtml(e.type)}</span>` : ''}
+        ${e.difficulty ? `<span class="tag">${this.escHtml(e.difficulty)}</span>` : ''}
+      </div>
+    </div>
+    <span class="arrow">→</span>
+  </a>
+</li>`;
+    }).join('');
+
+    const pageNav = totalPages > 1 ? this.buildPagination(page, totalPages, totalEntries) : '';
+
+    return `<!DOCTYPE html>
+<html lang="zh">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>组卷网题目总览</title><style>${css}</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>📚 组卷网题目总览</h1>
+    <a href="/">刷新</a>
+  </div>
+  <div class="card">
+    <ul class="entry-list">
+      ${items}
+    </ul>
+  </div>
+  ${pageNav}
+</div>
+</body>
+</html>`;
+  }
+
+  private formatTimestamp(ts: string): string {
+    const d = new Date(parseInt(ts));
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+      `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+
+  private buildPagination(page: number, totalPages: number, totalEntries: number): string {
+    const start = (page - 1) * 20 + 1;
+    const end = Math.min(page * 20, totalEntries);
+    const prev = page > 1 ? `<a href="/?page=${page - 1}">← 上一页</a>` : `<span class="disabled">← 上一页</span>`;
+    const next = page < totalPages ? `<a href="/?page=${page + 1}">下一页 →</a>` : `<span class="disabled">下一页 →</span>`;
+    return `<div class="pagination">
+  ${prev}
+  <span class="info-text">第 ${start}-${end} 条，共 ${totalEntries} 条</span>
+  ${next}
+</div>`;
+  }
+
   private buildOverviewHtml(results: ScrapeResult[], meta: ScrapeMeta, defaultTheme: ExportTheme): string {
     const css = this.buildCss();
     const metaParts: string[] = [];
@@ -69,6 +187,7 @@ export class HtmlExporter {
 </div>
 
 <div class="container">
+  <div class="back-link"><a href="/">← 返回目录</a></div>
   <div class="card">
     <div class="card-header">
       <h1 class="overview-title">题目总览</h1>
@@ -405,6 +524,9 @@ mjx-container { overflow-x: auto; overflow-y: hidden; }
 .nav-btn.home:hover { opacity: 0.85; }
 
 /* ─── 总览页 ─── */
+.back-link { margin-bottom: 16px; }
+.back-link a { font-size: 14px; color: var(--accent); text-decoration: none; }
+.back-link a:hover { text-decoration: underline; }
 .overview-title { font-size: 18px; font-weight: 700; color: var(--accent); margin-bottom: 8px; }
 .meta-info { color: var(--text-muted); font-size: 13px; }
 .question-list { display: flex; flex-direction: column; gap: 8px; }

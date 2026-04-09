@@ -113,7 +113,7 @@ export function createScrapeCommand(): Command {
     // theme：命令行 > 默认 light
     const theme: ExportTheme = (['dark', 'sepia'].includes(opts.theme as string) ? opts.theme : 'light') as ExportTheme;
 
-    const batchDir = path.resolve('./zujuan-output', output.options.timestamp);
+    const batchDir = path.resolve(configManager.get('outputDir'), output.options.timestamp);
     const { options: meta, results } = output;
 
     let htmlCount = 0, mdCount = 0, zipCount = 0;

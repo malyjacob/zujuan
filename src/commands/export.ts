@@ -7,7 +7,7 @@ import { htmlExporter } from '../lib/exporters/html-exporter';
 import { markdownExporter } from '../lib/exporters/markdown-exporter';
 
 function resolveBatchDir(target?: string): string | null {
-  const outputDir = path.resolve('./zujuan-output');
+  const outputDir = path.resolve(configManager.get('outputDir'));
 
   if (target) {
     const abs = path.isAbsolute(target) ? target : path.resolve(target);

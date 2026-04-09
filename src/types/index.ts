@@ -16,6 +16,8 @@ export interface ConfigOptions {
   visionEnabled?: boolean;
   // 导出格式选项
   exportFormat?: ExportFormat;
+  // 输出目录选项
+  outputDir?: string;
   // 隐藏选项（代码内部使用，不暴露给 config 命令）
   cookie?: string;
   browserPort?: number;
@@ -41,6 +43,8 @@ export interface Config {
   visionEnabled: boolean;
   // 导出格式选项
   exportFormat: ExportFormat;
+  // 输出目录选项
+  outputDir: string;
   // 隐藏选项
   cookie: string;
   browserPort: number;
@@ -146,3 +150,4 @@ export interface BrowserState {
   port: number;
   startedAt: string;
 }
+
