@@ -128,6 +128,7 @@ export class ScraperEngine {
 
     // 第一步：逐题截图并收集答案 URL
     const tasks: QuestionTask[] = [];
+    let quotaHitCount = 0;
 
     for (let i = 0; i < count; i++) {
       const indexStr = (i + 1).toString().padStart(3, '0');
@@ -278,7 +279,26 @@ export class ScraperEngine {
         if (answerSrc) {
           logger.log('verbose', `第 ${i + 1}/${count}: 答案 URL 已收集`);
         } else {
-          logger.log('normal', `第 ${i + 1}/${count}: 未找到答案图片`);
+          // 检测答案不可用的原因
+          const reason = await handle.evaluate(() => {
+            const msg = document.querySelector('div.quota-instuff p');
+            if (msg) return msg.textContent?.trim() || '';
+            return '';
+          });
+          if (reason.includes('每日最多')) {
+            quotaHitCount++;
+            if (quotaHitCount === 1) {
+              logger.log('normal', '');
+              logger.log('normal', '========================================');
+              logger.log('normal', '  答案查看已达每日限额（免费用户每日30道）');
+              logger.log('normal', '  请明日再试，或升级会员 / 申请体验');
+              logger.log('normal', '========================================');
+              logger.log('normal', '');
+            }
+            logger.log('normal', `第 ${i + 1}/${count}: 答案被限流 — ${reason}`);
+          } else {
+            logger.log('normal', `第 ${i + 1}/${count}: 未找到答案图片`);
+          }
         }
 
       } catch (error) {
@@ -351,6 +371,10 @@ export class ScraperEngine {
     const jsonPath = path.join(batchDir, 'results.json');
     fs.writeFileSync(jsonPath, JSON.stringify(output, null, 2), 'utf-8');
     logger.log('quiet', `结果已保存到: ${jsonPath}`);
+
+    if (quotaHitCount > 0) {
+      logger.log('normal', `注意：本次有 ${quotaHitCount} 道题答案因每日限额无法查看（免费用户每日30道）`);
+    }
 
     await browserManager.close();
     return output;
