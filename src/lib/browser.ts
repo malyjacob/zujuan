@@ -334,8 +334,8 @@ export class BrowserManager {
         this.context = await this.browser.newContext();
         this.page = await this.context.newPage();
       }
-
-      // 访问初始页面
+      // 访问初始页面前先应用 Cookie
+      await this.applyConfigCookies();
       await this.page.goto('https://zujuan.xkw.com', { waitUntil: 'domcontentloaded' });
       await this.page.waitForTimeout(2000);
 
@@ -436,6 +436,30 @@ export class BrowserManager {
     }
   }
 
+  private async applyConfigCookies(): Promise<void> {
+    try {
+      const rawCookie = configManager.get('cookie');
+      if (!rawCookie) return;
+
+      const cookies = rawCookie.split(';').map(c => {
+        const [name, ...valueParts] = c.trim().split('=');
+        return {
+          name: name.trim(),
+          value: decodeURIComponent(valueParts.join('=')),
+          domain: 'zujuan.xkw.com',
+          path: '/',
+        };
+      }).filter(c => c.name);
+
+      if (cookies.length > 0) {
+        await this.context!.addCookies(cookies);
+        writeLog(`已应用 ${cookies.length} 个配置 Cookie`);
+      }
+    } catch (error) {
+      writeLog(`应用配置 Cookie 失败: ${error}`, 'WARN');
+    }
+  }
+
   private async removeOverlay(): Promise<void> {
     try {
       const overlay = await this.page!.$('div.ai-search-guide-panel');
@@ -454,8 +478,9 @@ export class BrowserManager {
 
   private async checkLoginStatus(): Promise<boolean> {
     try {
-      const avatar = await this.page!.$('div.avatar img');
-      return avatar !== null;
+      // a.login-btn 存在表示未登录，不存在表示已登录
+      const loginBtn = await this.page!.$('a.login-btn');
+      return loginBtn === null;
     } catch {
       return false;
     }
@@ -473,11 +498,27 @@ export class BrowserManager {
           win.logindiv();
         }
       });
-      await this.page!.waitForTimeout(2000);
 
-      // 等待二维码加载
+      // 等待跳转到 CAS 登录页并等待页面加载
+      console.log('正在等待登录页加载...');
+      await this.page!.waitForLoadState('load');
+      await this.page!.waitForTimeout(3000);
+
+      // 等待二维码加载（支持 canvas 或 img 两种渲染方式）
       console.log('正在获取二维码...');
-      await this.page!.waitForSelector('#qrcode canvas', { timeout: 5000 });
+      const currentUrl = this.page!.url();
+      writeLog(`当前页面 URL: ${currentUrl}`);
+      // 尝试多种方式等待二维码
+      try {
+        await this.page!.waitForSelector('#qrcode canvas', { timeout: 10000 });
+      } catch {
+        // canvas 不存在则尝试 img
+        const img = await this.page!.$('#qrcode img');
+        if (!img) {
+          throw new Error('未找到二维码元素（#qrcode canvas 或 #qrcode img）');
+        }
+        writeLog('二维码通过 img 标签渲染');
+      }
 
       const loginQrDir = configManager.get('loginQrDir');
       const qrCodePath = path.join(loginQrDir, 'login-qr.png');
@@ -593,7 +634,7 @@ export class BrowserManager {
   async isLoggedIn(): Promise<boolean> {
     if (!this.page) return false;
     try {
-      const loginBtn = await this.page.$('body > header > div.top-bar > div > nav > ul > li.item.user-entry > a.login-btn');
+      const loginBtn = await this.page.$('a.login-btn');
       return loginBtn === null;
     } catch {
       return false;
