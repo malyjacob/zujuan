@@ -538,22 +538,97 @@ export class BrowserManager {
 
       let loginSuccess = false;
       const startTime = Date.now();
+      let lastCheckUrl = '';
 
       while (Date.now() - startTime < 60000) {
         await this.page!.waitForTimeout(2000);
-        const isLoggedIn = await this.checkLoginStatus();
-        if (isLoggedIn) {
-          loginSuccess = true;
-          console.log('扫码成功！');
-          writeLog('扫码登录成功');
-          break;
-        }
-        const qrcodeStillExists = await this.page!.$('#qrcode canvas');
-        if (!qrcodeStillExists) {
-          loginSuccess = true;
-          console.log('扫码成功！');
-          writeLog('扫码登录成功');
-          break;
+
+        // 每次轮询整体 try-catch，防止页面导航导致旧引用失效而崩溃
+        try {
+          // 方法1: 尝试更新 this.page 引用（CAS 登录成功后可能会导航到新页面）
+          try {
+            const currentUrl = this.page!.url();
+            if (currentUrl !== lastCheckUrl) {
+              writeLog(`轮询 - URL: ${currentUrl}`);
+              lastCheckUrl = currentUrl;
+            }
+          } catch {
+            // this.page 已失效，从 browser 获取最新的活跃页面
+            writeLog('主页面引用已失效，尝试获取新页面...', 'WARN');
+            try {
+              const pages = this.browser?.contexts()[0]?.pages() || [];
+              if (pages.length > 0) {
+                this.page = pages[pages.length - 1];
+                writeLog(`已更新主页面引用，新 URL: ${this.page.url()}`);
+              }
+            } catch (e2) {
+              writeLog(`获取新页面失败: ${e2}`, 'WARN');
+            }
+          }
+
+          // 方法2（核心）: 在后台开一个新页面去主站检查登录状态
+          // 新页面与 CAS 页共享同一个 browser context（共享 cookies）
+          let tempPage: Page | null = null;
+          try {
+            tempPage = await this.context!.newPage();
+            await tempPage.goto('https://zujuan.xkw.com', { waitUntil: 'domcontentloaded', timeout: 15000 });
+            await tempPage.waitForTimeout(1000);
+
+            // 检查 a.login-btn 是否存在（不存在 = 已登录）
+            const loginBtn = await tempPage.$('a.login-btn');
+            const loggedIn = loginBtn === null;
+
+            if (loggedIn) {
+              loginSuccess = true;
+              console.log('扫码成功！');
+              writeLog('扫码登录成功（后台页面检测）');
+              await tempPage.close().catch(() => {});
+              break;
+            }
+          } catch (e) {
+            writeLog(`后台登录检测异常: ${e}`, 'WARN');
+          } finally {
+            if (tempPage) {
+              await tempPage.close().catch(() => {});
+            }
+          }
+
+          // 方法3（辅助）: 仅在 this.page 有效时检查二维码是否消失
+          try {
+            const qrcodeCanvas = await this.page!.$('#qrcode canvas');
+            const qrcodeImg = await this.page!.$('#qrcode img');
+            if (!qrcodeCanvas && !qrcodeImg) {
+              writeLog('二维码已消失，等待确认登录状态...');
+              await this.page!.waitForTimeout(2000);
+
+              let confirmPage: Page | null = null;
+              try {
+                confirmPage = await this.context!.newPage();
+                await confirmPage.goto('https://zujuan.xkw.com', { waitUntil: 'domcontentloaded', timeout: 15000 });
+                await confirmPage.waitForTimeout(1000);
+
+                const confirmBtn = await confirmPage.$('a.login-btn');
+                if (confirmBtn === null) {
+                  loginSuccess = true;
+                  console.log('扫码成功！');
+                  writeLog('扫码登录成功（二维码消失 + 后台确认）');
+                  await confirmPage.close().catch(() => {});
+                  break;
+                }
+              } catch (e) {
+                writeLog(`二维码消失后确认登录失败: ${e}`, 'WARN');
+              } finally {
+                if (confirmPage) {
+                  await confirmPage.close().catch(() => {});
+                }
+              }
+            }
+          } catch {
+            // this.page 失效导致二维码检查失败，忽略，下次轮询会自动恢复引用
+            writeLog('二维码检查跳过（页面引用可能已失效）', 'WARN');
+          }
+        } catch {
+          writeLog('轮询迭代异常，继续等待', 'WARN');
         }
       }
 

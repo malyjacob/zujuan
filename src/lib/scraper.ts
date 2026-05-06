@@ -310,21 +310,28 @@ export class ScraperEngine {
 
     // 第二步：并行下载所有答案图片
     logger.log('verbose', '开始并行下载答案图片...');
-    await Promise.all(
-      tasks
-        .filter(t => t.answerSrc)
-        .map(t => this.downloadImage(t.answerSrc!, t.answerPath))
+
+    // 注意：答案图片的 URL 已内置认证 token（enVqdWFu 参数），无需额外传 cookies
+    const answerTasks = tasks.filter(t => t.answerSrc);
+    const answerResults = await Promise.allSettled(
+      answerTasks.map(t => this.downloadImage(t.answerSrc!, t.answerPath, 3))
     );
+    const answerFailCount = answerResults.filter(r => r.status === 'rejected').length;
+    if (answerFailCount > 0) {
+      logger.log('normal', `答案图片下载: ${answerTasks.length - answerFailCount} 成功, ${answerFailCount} 失败`);
+    }
 
     // 第三步：并行下载所有示例图
-    logger.log('verbose', '开始并行下载示例图...');
-    const imageDownloadPromises: Promise<void>[] = [];
-    for (const t of tasks) {
-      for (let j = 0; j < t.imagesSrc.length; j++) {
-        imageDownloadPromises.push(this.downloadImage(t.imagesSrc[j], t.imagesPaths[j]));
-      }
+    if (tasks.some(t => t.imagesSrc.length > 0)) {
+      logger.log('verbose', '开始并行下载示例图...');
+      await Promise.allSettled(
+        tasks.flatMap(t =>
+          t.imagesSrc.map((src, j) =>
+            this.downloadImage(src, t.imagesPaths[j], 3)
+          )
+        )
+      );
     }
-    await Promise.all(imageDownloadPromises);
 
     // 第四步：并行视觉 OCR（所有截图完成后一次性并发调用，不阻塞截图流程）
     if (configManager.get('visionEnabled')) {
@@ -405,25 +412,72 @@ export class ScraperEngine {
     await this.page.waitForTimeout(500);
   }
 
-  private async downloadImage(url: string, destPath: string): Promise<void> {
+  private async downloadImage(url: string, destPath: string, retries = 3): Promise<void> {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        await this._downloadSingle(url, destPath);
+        return;
+      } catch (error) {
+        if (attempt < retries) {
+          const delay = attempt * 1000;
+          logger.log('verbose', `下载失败 (${url}), 第 ${attempt}/${retries} 次重试, 等待 ${delay}ms: ${error}`);
+          await new Promise(r => setTimeout(r, delay));
+        } else {
+          logger.log('normal', `下载失败 (${url}), 已重试 ${retries} 次: ${error}`);
+          throw error;
+        }
+      }
+    }
+  }
+
+  /**
+   * 注意：答案图片 URL 本身已在查询参数中携带认证信息
+   * （enVqdWFu=base64... 包含 userId 和 user_token），
+   * 因此不需要额外传 cookies。传 cookies 反而可能因
+   * 某些 cookie 含非 ASCII 字符导致 ERR_INVALID_CHAR 错误。
+   */
+  private _downloadSingle(url: string, destPath: string): Promise<void> {
     return new Promise((resolve, reject) => {
       const client = url.startsWith('https') ? https : http;
-      client.get(url, (res) => {
+
+      const headers: Record<string, string> = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+        'Referer': 'https://zujuan.xkw.com/',
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+      };
+
+      const req = client.get(url, { headers, timeout: 30_000 }, (res) => {
         if (res.statusCode === 301 || res.statusCode === 302) {
           const redirectUrl = res.headers.location;
           if (redirectUrl) {
-            this.downloadImage(redirectUrl, destPath).then(resolve).catch(reject);
+            this._downloadSingle(redirectUrl, destPath).then(resolve).catch(reject);
             return;
           }
+        }
+        if (res.statusCode !== 200) {
+          res.resume();
+          reject(new Error(`HTTP ${res.statusCode}`));
+          return;
         }
         const chunks: Buffer[] = [];
         res.on('data', (chunk: Buffer) => chunks.push(chunk));
         res.on('end', () => {
+          if (chunks.length === 0) {
+            reject(new Error('下载内容为空'));
+            return;
+          }
           fs.writeFileSync(destPath, Buffer.concat(chunks));
           resolve();
         });
         res.on('error', reject);
-      }).on('error', reject);
+      });
+
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('请求超时 (30s)'));
+      });
+      req.on('error', reject);
     });
   }
 }
