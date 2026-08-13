@@ -1,6 +1,5 @@
 import * as fs from 'fs';
 import * as path from 'path';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const archiver = require('archiver');
 import { ScrapeResult, ScrapeMeta } from '../../types';
 
@@ -80,7 +79,9 @@ export class MarkdownExporter {
       `tags:`,
       ...r.knowledgeKeywords.map((kw: string) => `  - "${this.escMd(kw)}"`),
       '---',
-    ].filter(Boolean).join('\n');
+    ]
+      .filter(Boolean)
+      .join('\n');
 
     const qText = r.questionText || '';
 
@@ -91,9 +92,10 @@ export class MarkdownExporter {
 
     const aText = r.answerText || '';
 
-    const imgLines = r.images.length > 0
-      ? r.images.map((img: string, i: number) => `![示例图${i + 1}](${path.basename(img)})`).join('\n')
-      : '';
+    const imgLines =
+      r.images.length > 0
+        ? r.images.map((img: string, i: number) => `![示例图${i + 1}](${path.basename(img)})`).join('\n')
+        : '';
 
     return `${frontmatter}
 

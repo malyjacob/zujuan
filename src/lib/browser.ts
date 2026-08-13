@@ -4,160 +4,11 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { spawn, ChildProcess } from 'child_process';
 import * as http from 'http';
-import { configManager, getConfigDir, autoDetectBrowser } from './config';
-import { BrowserState } from '../types';
+import { configManager } from './config';
+import { logger } from './logger';
+import { BrowserStateManager, STORAGE_STATE_FILE } from './browser-state';
+import { autoDetectBrowser } from './browser-detect';
 import { sendQrCodeToDiscord } from './discord-notifier';
-
-const STORAGE_STATE_FILE = path.join(getConfigDir(), 'storage-state.json');
-const BROWSER_STATE_FILE = path.join(getConfigDir(), '.browser-state.json');
-
-// 日志写入函数
-function writeLog(message: string, level: 'INFO' | 'WARN' | 'ERROR' = 'INFO'): void {
-  if (!configManager.get('logEnabled')) return;
-
-  const logDir = configManager.get('logDir');
-  const logPath = path.join(logDir, 'zujuan.log');
-  const timestamp = new Date().toISOString();
-  const logMessage = `[${timestamp}] [${level}] ${message}\n`;
-
-  try {
-    if (!fs.existsSync(logDir)) {
-      fs.mkdirSync(logDir, { recursive: true });
-    }
-    fs.appendFileSync(logPath, logMessage, 'utf-8');
-  } catch (error) {
-    console.error('写入日志失败:', error);
-  }
-}
-
-// 浏览器状态文件管理
-export class BrowserStateManager {
-  static save(state: BrowserState): void {
-    try {
-      fs.writeFileSync(BROWSER_STATE_FILE, JSON.stringify(state, null, 2), 'utf-8');
-      writeLog(`浏览器状态已保存: PID=${state.pid}, Port=${state.port}`);
-    } catch (error) {
-      writeLog(`保存浏览器状态失败: ${error}`, 'ERROR');
-    }
-  }
-
-  static load(): BrowserState | null {
-    try {
-      if (fs.existsSync(BROWSER_STATE_FILE)) {
-        const data = fs.readFileSync(BROWSER_STATE_FILE, 'utf-8');
-        return JSON.parse(data);
-      }
-    } catch (error) {
-      writeLog(`读取浏览器状态失败: ${error}`, 'ERROR');
-    }
-    return null;
-  }
-
-  /**
-   * 保存启动前最小状态（PID + port，wsEndpoint 尚不可用）。
-   * 在 Chrome 刚 spawn 后立即调用，确保 Ctrl+C 中断后状态文件已存在，
-   * 下次 start 能感知到 Chrome 在运行。
-   */
-  static saveStartup(pid: number, port: number): void {
-    try {
-      const state: BrowserState = {
-        wsEndpoint: '',
-        pid,
-        port,
-        startedAt: new Date().toISOString(),
-      };
-      fs.writeFileSync(BROWSER_STATE_FILE, JSON.stringify(state, null, 2), 'utf-8');
-      writeLog(`Chrome 已启动，PID=${pid}，等待 CDP 端点...`);
-    } catch (error) {
-      writeLog(`保存启动状态失败: ${error}`, 'ERROR');
-    }
-  }
-
-  static clear(): void {
-    try {
-      if (fs.existsSync(BROWSER_STATE_FILE)) {
-        fs.unlinkSync(BROWSER_STATE_FILE);
-        writeLog('浏览器状态已清除');
-      }
-    } catch (error) {
-      writeLog(`清除浏览器状态失败: ${error}`, 'ERROR');
-    }
-  }
-
-  static isProcessRunning(pid: number): boolean {
-    if (!pid || pid === 0) return false;
-    try {
-      process.kill(pid, 0);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  static async isBrowserRunningOnPort(port: number): Promise<boolean> {
-    try {
-      const result = await new Promise<boolean>((resolve) => {
-        const req = http.request(
-          {
-            hostname: '127.0.0.1',
-            port,
-            path: '/json/version',
-            method: 'GET',
-            timeout: 3000,
-          },
-          (res) => {
-            let data = '';
-            res.on('data', (chunk) => (data += chunk));
-            res.on('end', () => {
-              try {
-                const version = JSON.parse(data);
-                resolve(!!version.webSocketDebuggerUrl);
-              } catch {
-                resolve(false);
-              }
-            });
-          }
-        );
-        req.on('error', () => resolve(false));
-        req.on('timeout', () => {
-          req.destroy();
-          resolve(false);
-        });
-        req.end();
-      });
-      return result;
-    } catch {
-      return false;
-    }
-  }
-
-  static isBrowserRunning(): boolean {
-    const state = this.load();
-    if (!state) return false;
-    if (state.pid && state.pid !== 0) {
-      return this.isProcessRunning(state.pid);
-    }
-    if (state.wsEndpoint) {
-      return true;
-    }
-    return false;
-  }
-
-  static killProcess(pid: number): boolean {
-    if (!pid || pid === 0) {
-      writeLog('PID 为空或 0，跳过进程终止');
-      return false;
-    }
-    try {
-      process.kill(pid, 'SIGTERM');
-      writeLog(`已发送 SIGTERM 到进程 ${pid}`);
-      return true;
-    } catch (error) {
-      writeLog(`杀掉进程 ${pid} 失败: ${error}`, 'ERROR');
-      return false;
-    }
-  }
-}
 
 // 辅助函数：通过 HTTP 获取 WebSocket URL
 async function getWsEndpoint(port: number, retries = 15, delayMs = 2000): Promise<string> {
@@ -183,7 +34,7 @@ async function getWsEndpoint(port: number, retries = 15, delayMs = 2000): Promis
                 } else {
                   reject(new Error('未找到 webSocketDebuggerUrl'));
                 }
-              } catch (e) {
+              } catch {
                 reject(new Error('解析版本信息失败: ' + data));
               }
             });
@@ -197,11 +48,11 @@ async function getWsEndpoint(port: number, retries = 15, delayMs = 2000): Promis
         req.end();
       });
       return result;
-    } catch (error) {
+    } catch {
       // 静默忽略，等待下一次重试
     }
     if (i < retries - 1) {
-      await new Promise(resolve => setTimeout(resolve, delayMs));
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
   }
   throw new Error(`在 ${retries} 次尝试后仍无法获取 WebSocket 端点`);
@@ -227,7 +78,7 @@ export class BrowserManager {
 
   // 启动浏览器（使用 child_process）
   async launch(): Promise<void> {
-    writeLog('开始启动浏览器...');
+    logger.fileLog('开始启动浏览器...');
 
     const browserDir = configManager.get('browserDir');
     const headless = configManager.get('headless');
@@ -236,13 +87,13 @@ export class BrowserManager {
     // 检查端口上是否已有浏览器运行（即使状态文件丢失）
     if (await BrowserStateManager.isBrowserRunningOnPort(port)) {
       console.log(`检测到端口 ${port} 上已有浏览器运行，尝试连接到现有浏览器...`);
-      writeLog(`检测到端口 ${port} 上已有浏览器运行`);
+      logger.fileLog(`检测到端口 ${port} 上已有浏览器运行`);
       try {
         await this.connect();
         console.log('成功连接到已运行的浏览器！');
         return;
       } catch (connectError) {
-        writeLog(`连接现有浏览器失败: ${connectError}，将尝试重新启动`);
+        logger.fileLog(`连接现有浏览器失败: ${connectError}，将尝试重新启动`);
         console.log('连接失败，将重新启动浏览器...');
       }
     }
@@ -250,7 +101,7 @@ export class BrowserManager {
     if (BrowserStateManager.isBrowserRunning()) {
       const state = BrowserStateManager.load();
       console.log(`浏览器已在运行 (PID: ${state?.pid})，请先使用 shutup 命令关闭`);
-      writeLog('启动失败：浏览器已在运行');
+      logger.fileLog('启动失败：浏览器已在运行');
       throw new Error('浏览器已在运行');
     }
 
@@ -264,9 +115,7 @@ export class BrowserManager {
     }
 
     if (!chromiumPath || !fs.existsSync(chromiumPath)) {
-      throw new Error(
-        `未找到浏览器可执行文件，请通过 config --browser-dir 指定 Chrome/Chromium 安装路径`
-      );
+      throw new Error(`未找到浏览器可执行文件，请通过 config --browser-dir 指定 Chrome/Chromium 安装路径`);
     }
 
     const isWin = os.platform() === 'win32';
@@ -277,11 +126,11 @@ export class BrowserManager {
       '--no-default-browser-check',
       isWin ? '' : '--disable-dev-shm-usage',
       '--no-sandbox',
-      `--user-data-dir=${path.join(os.tmpdir(), `zujuan-chrome-${port}`)}`
+      `--user-data-dir=${path.join(os.tmpdir(), `zujuan-chrome-${port}`)}`,
     ].filter(Boolean);
 
-    writeLog(`启动 Chromium: ${chromiumPath}`);
-    writeLog(`参数: ${args.join(' ')}`);
+    logger.fileLog(`启动 Chromium: ${chromiumPath}`);
+    logger.fileLog(`参数: ${args.join(' ')}`);
 
     try {
       // 使用 child_process 启动浏览器（detached 模式）
@@ -294,7 +143,7 @@ export class BrowserManager {
       this.chromeProcess.unref(); // 让进程独立于父进程
 
       if (this.pid) {
-        writeLog(`Chromium 进程已启动，PID: ${this.pid}`);
+        logger.fileLog(`Chromium 进程已启动，PID: ${this.pid}`);
       }
 
       // 尽早保存最小状态，这样 Ctrl+C 在 getWsEndpoint 轮询阶段中断时，
@@ -305,7 +154,7 @@ export class BrowserManager {
 
       // 获取 WebSocket 端点
       this.wsEndpoint = await getWsEndpoint(port);
-      writeLog(`WebSocket 端点: ${this.wsEndpoint}`);
+      logger.fileLog(`WebSocket 端点: ${this.wsEndpoint}`);
 
       // 连接成功后将完整状态（包含 wsEndpoint）覆盖写入
       BrowserStateManager.save({
@@ -314,11 +163,11 @@ export class BrowserManager {
         port,
         startedAt: new Date().toISOString(),
       });
-      writeLog('浏览器状态已保存（启动阶段）');
+      logger.fileLog('浏览器状态已保存（启动阶段）');
 
       // 通过 CDP 连接到浏览器
       this.browser = await chromium.connectOverCDP(this.wsEndpoint);
-      writeLog('已连接到浏览器');
+      logger.fileLog('已连接到浏览器');
 
       // 获取页面
       const contexts = this.browser.contexts();
@@ -347,11 +196,11 @@ export class BrowserManager {
 
       if (!isLoggedIn) {
         console.log('未登录，开始扫码登录流程...');
-        writeLog('检测到未登录，开始扫码登录');
+        logger.fileLog('检测到未登录，开始扫码登录');
         await this.doQRCodeLogin();
       } else {
         console.log('已登录');
-        writeLog('检测到已登录状态');
+        logger.fileLog('检测到已登录状态');
       }
 
       // 保存登录状态
@@ -369,15 +218,16 @@ export class BrowserManager {
       }
 
       console.log('浏览器启动成功！');
-      writeLog('浏览器启动完成');
-
+      logger.fileLog('浏览器启动完成');
     } catch (error) {
-      writeLog(`浏览器启动失败: ${error}`, 'ERROR');
+      logger.fileLog(`浏览器启动失败: ${error}`, 'ERROR');
       // 清理
       if (this.chromeProcess) {
         try {
           process.kill(this.pid!, 'SIGTERM');
-        } catch {}
+        } catch {
+          // 进程可能已退出，忽略
+        }
       }
       this.browser = null;
       this.chromeProcess = null;
@@ -388,27 +238,27 @@ export class BrowserManager {
 
   // 连接到已运行的浏览器
   async connect(): Promise<void> {
-    writeLog('尝试连接到已运行的浏览器...');
+    logger.fileLog('尝试连接到已运行的浏览器...');
 
     const state = BrowserStateManager.load();
 
     if (!state) {
-      writeLog('未找到浏览器状态文件，请先运行 start 命令', 'ERROR');
+      logger.fileLog('未找到浏览器状态文件，请先运行 start 命令', 'ERROR');
       throw new Error('未找到浏览器状态文件，请先运行 start 命令');
     }
 
     if (!BrowserStateManager.isProcessRunning(state.pid)) {
-      writeLog(`浏览器进程 ${state.pid} 不存在或已崩溃`, 'ERROR');
+      logger.fileLog(`浏览器进程 ${state.pid} 不存在或已崩溃`, 'ERROR');
       BrowserStateManager.clear();
       throw new Error(`浏览器进程不存在或已崩溃，请重新运行 start 命令`);
     }
 
-    writeLog(`连接到浏览器，PID: ${state.pid}`);
+    logger.fileLog(`连接到浏览器，PID: ${state.pid}`);
 
     try {
       // 如果 wsEndpoint 为空（上次 launch 在 getWsEndpoint 轮询阶段被 Ctrl+C 中断），
       // 重新从端口获取 WebSocket 端点
-      const endpoint = state.wsEndpoint || await getWsEndpoint(state.port);
+      const endpoint = state.wsEndpoint || (await getWsEndpoint(state.port));
       this.browser = await chromium.connectOverCDP(endpoint);
       this.wsEndpoint = endpoint;
       this.pid = state.pid;
@@ -427,12 +277,11 @@ export class BrowserManager {
         this.page = await this.context.newPage();
       }
 
-      writeLog('成功连接到浏览器');
-
+      logger.fileLog('成功连接到浏览器');
     } catch (error) {
-      writeLog(`连接浏览器失败: ${error}`, 'ERROR');
+      logger.fileLog(`连接浏览器失败: ${error}`, 'ERROR');
       BrowserStateManager.clear();
-      throw new Error(`连接浏览器失败，请重新运行 start 命令`);
+      throw new Error('连接浏览器失败，请重新运行 start 命令', { cause: error });
     }
   }
 
@@ -441,22 +290,25 @@ export class BrowserManager {
       const rawCookie = configManager.get('cookie');
       if (!rawCookie) return;
 
-      const cookies = rawCookie.split(';').map(c => {
-        const [name, ...valueParts] = c.trim().split('=');
-        return {
-          name: name.trim(),
-          value: decodeURIComponent(valueParts.join('=')),
-          domain: 'zujuan.xkw.com',
-          path: '/',
-        };
-      }).filter(c => c.name);
+      const cookies = rawCookie
+        .split(';')
+        .map((c) => {
+          const [name, ...valueParts] = c.trim().split('=');
+          return {
+            name: name.trim(),
+            value: decodeURIComponent(valueParts.join('=')),
+            domain: 'zujuan.xkw.com',
+            path: '/',
+          };
+        })
+        .filter((c) => c.name);
 
       if (cookies.length > 0) {
         await this.context!.addCookies(cookies);
-        writeLog(`已应用 ${cookies.length} 个配置 Cookie`);
+        logger.fileLog(`已应用 ${cookies.length} 个配置 Cookie`);
       }
     } catch (error) {
-      writeLog(`应用配置 Cookie 失败: ${error}`, 'WARN');
+      logger.fileLog(`应用配置 Cookie 失败: ${error}`, 'WARN');
     }
   }
 
@@ -464,7 +316,7 @@ export class BrowserManager {
     try {
       const overlay = await this.page!.$('div.ai-search-guide-panel');
       if (overlay) {
-        writeLog('移除覆盖层...');
+        logger.fileLog('移除覆盖层...');
         await this.page!.evaluate(() => {
           const el = document.querySelector('div.ai-search-guide-panel') as HTMLElement | null;
           if (el) el.style.display = 'none';
@@ -472,7 +324,7 @@ export class BrowserManager {
         await this.page!.waitForTimeout(500);
       }
     } catch (error) {
-      writeLog(`移除覆盖层失败: ${error}`, 'WARN');
+      logger.fileLog(`移除覆盖层失败: ${error}`, 'WARN');
     }
   }
 
@@ -507,7 +359,7 @@ export class BrowserManager {
       // 等待二维码加载（支持 canvas 或 img 两种渲染方式）
       console.log('正在获取二维码...');
       const currentUrl = this.page!.url();
-      writeLog(`当前页面 URL: ${currentUrl}`);
+      logger.fileLog(`当前页面 URL: ${currentUrl}`);
       // 尝试多种方式等待二维码
       try {
         await this.page!.waitForSelector('#qrcode canvas', { timeout: 10000 });
@@ -517,7 +369,7 @@ export class BrowserManager {
         if (!img) {
           throw new Error('未找到二维码元素（#qrcode canvas 或 #qrcode img）');
         }
-        writeLog('二维码通过 img 标签渲染');
+        logger.fileLog('二维码通过 img 标签渲染');
       }
 
       const loginQrDir = configManager.get('loginQrDir');
@@ -549,20 +401,20 @@ export class BrowserManager {
           try {
             const currentUrl = this.page!.url();
             if (currentUrl !== lastCheckUrl) {
-              writeLog(`轮询 - URL: ${currentUrl}`);
+              logger.fileLog(`轮询 - URL: ${currentUrl}`);
               lastCheckUrl = currentUrl;
             }
           } catch {
             // this.page 已失效，从 browser 获取最新的活跃页面
-            writeLog('主页面引用已失效，尝试获取新页面...', 'WARN');
+            logger.fileLog('主页面引用已失效，尝试获取新页面...', 'WARN');
             try {
               const pages = this.browser?.contexts()[0]?.pages() || [];
               if (pages.length > 0) {
                 this.page = pages[pages.length - 1];
-                writeLog(`已更新主页面引用，新 URL: ${this.page.url()}`);
+                logger.fileLog(`已更新主页面引用，新 URL: ${this.page.url()}`);
               }
             } catch (e2) {
-              writeLog(`获取新页面失败: ${e2}`, 'WARN');
+              logger.fileLog(`获取新页面失败: ${e2}`, 'WARN');
             }
           }
 
@@ -581,12 +433,12 @@ export class BrowserManager {
             if (loggedIn) {
               loginSuccess = true;
               console.log('扫码成功！');
-              writeLog('扫码登录成功（后台页面检测）');
+              logger.fileLog('扫码登录成功（后台页面检测）');
               await tempPage.close().catch(() => {});
               break;
             }
           } catch (e) {
-            writeLog(`后台登录检测异常: ${e}`, 'WARN');
+            logger.fileLog(`后台登录检测异常: ${e}`, 'WARN');
           } finally {
             if (tempPage) {
               await tempPage.close().catch(() => {});
@@ -598,7 +450,7 @@ export class BrowserManager {
             const qrcodeCanvas = await this.page!.$('#qrcode canvas');
             const qrcodeImg = await this.page!.$('#qrcode img');
             if (!qrcodeCanvas && !qrcodeImg) {
-              writeLog('二维码已消失，等待确认登录状态...');
+              logger.fileLog('二维码已消失，等待确认登录状态...');
               await this.page!.waitForTimeout(2000);
 
               let confirmPage: Page | null = null;
@@ -611,12 +463,12 @@ export class BrowserManager {
                 if (confirmBtn === null) {
                   loginSuccess = true;
                   console.log('扫码成功！');
-                  writeLog('扫码登录成功（二维码消失 + 后台确认）');
+                  logger.fileLog('扫码登录成功（二维码消失 + 后台确认）');
                   await confirmPage.close().catch(() => {});
                   break;
                 }
               } catch (e) {
-                writeLog(`二维码消失后确认登录失败: ${e}`, 'WARN');
+                logger.fileLog(`二维码消失后确认登录失败: ${e}`, 'WARN');
               } finally {
                 if (confirmPage) {
                   await confirmPage.close().catch(() => {});
@@ -625,23 +477,22 @@ export class BrowserManager {
             }
           } catch {
             // this.page 失效导致二维码检查失败，忽略，下次轮询会自动恢复引用
-            writeLog('二维码检查跳过（页面引用可能已失效）', 'WARN');
+            logger.fileLog('二维码检查跳过（页面引用可能已失效）', 'WARN');
           }
         } catch {
-          writeLog('轮询迭代异常，继续等待', 'WARN');
+          logger.fileLog('轮询迭代异常，继续等待', 'WARN');
         }
       }
 
       if (!loginSuccess) {
-        writeLog('扫码登录超时', 'ERROR');
+        logger.fileLog('扫码登录超时', 'ERROR');
         await this.shutdown();
         throw new Error('扫码登录超时（60秒）');
       }
 
       await this.page!.waitForTimeout(2000);
-
     } catch (error) {
-      writeLog(`扫码登录异常: ${error}`, 'ERROR');
+      logger.fileLog(`扫码登录异常: ${error}`, 'ERROR');
       await this.shutdown();
       throw error;
     }
@@ -650,7 +501,7 @@ export class BrowserManager {
   private async saveLoginState(): Promise<void> {
     if (this.context) {
       await this.context.storageState({ path: STORAGE_STATE_FILE });
-      writeLog(`登录状态已保存到: ${STORAGE_STATE_FILE}`);
+      logger.fileLog(`登录状态已保存到: ${STORAGE_STATE_FILE}`);
     }
   }
 
@@ -662,7 +513,7 @@ export class BrowserManager {
   }
 
   async close(): Promise<void> {
-    writeLog('关闭浏览器连接');
+    logger.fileLog('关闭浏览器连接');
     if (this.browser) {
       await this.browser.close();
       this.browser = null;
@@ -673,7 +524,7 @@ export class BrowserManager {
   }
 
   async shutdown(): Promise<void> {
-    writeLog('执行 shutdown，关闭浏览器进程');
+    logger.fileLog('执行 shutdown，关闭浏览器进程');
 
     if (this.browser) {
       await this.browser.close();
@@ -683,7 +534,9 @@ export class BrowserManager {
     if (this.chromeProcess && this.pid) {
       try {
         process.kill(this.pid, 'SIGTERM');
-      } catch {}
+      } catch {
+        // 进程可能已退出，忽略
+      }
       this.chromeProcess = null;
     }
 
@@ -699,7 +552,7 @@ export class BrowserManager {
     BrowserStateManager.clear();
 
     console.log('浏览器已关闭');
-    writeLog('浏览器已完全关闭');
+    logger.fileLog('浏览器已完全关闭');
   }
 
   isConnected(): boolean {

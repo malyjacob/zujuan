@@ -1,13 +1,5 @@
-import {
-  QuestionType,
-  Difficulty,
-  Year,
-  Grade,
-  Order,
-  Source,
-  Semester,
-  Category,
-} from '../types';
+import { QuestionType, Difficulty, Year, Grade, Order, Source, Semester, Category } from '../types';
+import { QUESTION_TYPE_CODES, ORDER_CODES } from './mappings';
 
 const BASE_URL = 'https://zujuan.xkw.com';
 
@@ -41,8 +33,8 @@ export class UrlBuilder {
   }
 
   private validateYear(year: Year): boolean {
-    const validYears: Year[] = [2023, 2024, 2025, 2026];
-    return validYears.includes(year);
+    // -1 = 更早年份；其余要求在合理年份范围内
+    return year === -1 || (Number.isInteger(year) && year >= 2000 && year <= 2100);
   }
 
   private validateGrade(grade: Grade): boolean {
@@ -53,13 +45,9 @@ export class UrlBuilder {
   setType(type: QuestionType, multiCount?: number, fillCount?: number): this {
     if (!this.validateType(type)) return this;
 
-    // 高中题型码: 单选2701, 多选2704, 填空2702, 解答2703
-    // 初中题型码: 单选1101, 多选1104, 填空1102, 解答1103
-    const typeMap = this.grade === 'high'
-      ? { t1: '2701', t2: '2704', t3: '2702', t4: '2703' }
-      : { t1: '1101', t2: '1104', t3: '1102', t4: '1103' };
+    const typeMap = QUESTION_TYPE_CODES[this.grade as Grade];
 
-    const baseType = typeMap[type as keyof typeof typeMap];
+    const baseType = typeMap[type];
     if (!baseType) return this;
 
     if (type === 't2' && multiCount !== undefined) {
@@ -86,7 +74,7 @@ export class UrlBuilder {
 
   setYear(year: Year): this {
     if (this.validateYear(year)) {
-      this.yearPart = `y${year}`;
+      this.yearPart = year === -1 ? 'y-1' : `y${year}`;
     }
     return this;
   }
@@ -98,33 +86,28 @@ export class UrlBuilder {
     return this;
   }
 
-  setSource(source: Source): this {
+  setSource(_source: Source): this {
     // Not used in new URL format
     return this;
   }
 
-  setRegion(regionId: string): this {
+  setRegion(_regionId: string): this {
     // Not used in new URL format
     return this;
   }
 
-  setSemester(semester: Semester): this {
+  setSemester(_semester: Semester): this {
     // Not used in new URL format
     return this;
   }
 
-  setCategory(category: Category): this {
+  setCategory(_category: Category): this {
     // Not used in new URL format
     return this;
   }
 
   setOrder(order: Order): this {
-    const orderMap: Record<Order, string> = {
-      latest: 'o2',
-      hot: 'o1',
-      comprehensive: 'o0',
-    };
-    this.orderPart = orderMap[order] || 'o2';
+    this.orderPart = ORDER_CODES[order] || 'o2';
     return this;
   }
 

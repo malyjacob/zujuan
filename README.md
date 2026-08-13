@@ -129,6 +129,8 @@ zujuan scrape -k <knowledge_id> [options]
 | `t3` | 填空题 | `qt2702` | `qt1102` |
 | `t4` | 解答题 | `qt2703` | `qt1103` |
 
+> **注意**：`t5`（判断）、`t6`（概念填空）站点无对应题型码，不支持 URL 筛选；传入时命令行会提示并抓取该知识点全部题型。
+
 **难度筛选（`-d`）：**
 
 | 值 | 说明 |
@@ -341,54 +343,6 @@ zujuan list --refresh
 
 ---
 
-### browse 命令
-
-交互式知识点浏览器（TUI），在终端中通过键盘操作浏览知识点树。
-
-```bash
-zujuan browse [options]
-```
-
-**选项：**
-
-| 选项 | 说明 | 默认值 |
-|------|------|--------|
-| `-g, --grade <grade>` | 年级：`high`=高中 `middle`=初中 | `high` |
-| `-i, --id <id>` | 从指定知识点节点开始浏览 | 根节点 |
-
-**键盘操作：**
-
-| 按键 | 功能 |
-|------|------|
-| `↑` / `k` | 上移 |
-| `↓` / `j` | 下移 |
-| `→` | 展开当前节点 |
-| `←` | 折叠当前节点（或跳到父节点） |
-| `Enter` | 切换展开/折叠 |
-| `Home` / `End` | 跳到首/末节点 |
-| `PageUp` / `PageDown` | 大步滚动（20项） |
-| `*` | 展开全部节点 |
-| `-` | 折叠全部（只留根） |
-| `/` | 进入搜索模式 |
-| `n` / `Shift+N` | 搜索结果下一个/上一个 |
-| `Esc` | 退出搜索模式 |
-| `q` / `Ctrl+C` | 退出 |
-
-**示例：**
-
-```bash
-# 启动高中知识点浏览器
-zujuan browse
-
-# 启动初中知识点浏览器
-zujuan browse -g middle
-
-# 从指定节点开始浏览
-zujuan browse -i zsd28279
-```
-
----
-
 ### serve 命令
 
 启动静态服务器，在浏览器中展示所有历史抓取结果。
@@ -584,7 +538,7 @@ zujuan serve --port 3000
 
 1. `connect()` — 通过 CDP 连接到已运行的浏览器
 2. 设置视口 1920×1080，访问目标 URL
-3. 滚动加载所有题目（触发懒加载）
+3. 自适应滚动加载（触发懒加载，直到页面高度不再变化，上限 10 轮）
 4. 检查登录状态（`a.login-btn` 元素是否存在），未登录则退出并提示重新 `start`
 5. 逐题处理：
    - 滚动到题目位置
@@ -596,7 +550,7 @@ zujuan serve --port 3000
    - **并行下载**所有答案图片
    - **并行下载**所有示例图
    - **并行视觉 OCR**（`visionEnabled=true` 时）：题目图片调用 `imageToMarkdown`，答案图片调用 `answerToMarkdown`（忽略几何图）
-   - 全局 OCR 兜底超时（120 秒），超时后跳过剩余 OCR 继续执行
+   - 全局 OCR 兜底超时（120 秒），超时后取消剩余 OCR 任务继续执行
 6. 保存 JSON 结果到 `{timestamp}/results.json`
 7. `close()` 关闭连接
 8. 如指定 `--export`：调用 export 模块生成 HTML 和/或 Markdown 文档
@@ -717,7 +671,7 @@ zujuan scrape -k zsd28279 -l 5
 ### Q：视觉 OCR 失败/超时怎么办？
 
 - 单个 OCR 请求有 30 秒超时（OpenAI API）
-- 全局 OCR 流程有 120 秒兜底超时，超时后跳过剩余 OCR 并继续保存 JSON
+- 全局 OCR 流程有 120 秒兜底超时，超时后取消剩余 OCR 请求并继续保存 JSON
 - 答案 OCR 失败不影响题目 OCR，已获取的题目文字会保留
 
 ### Q：如何更换视觉模型 API？
@@ -759,8 +713,20 @@ npm run build
 npm run dev
 
 # TypeScript 类型检查
-npx tsc --noEmit
+npm run typecheck
+
+# 单元测试（node:test + ts-node）
+npm test
+
+# ESLint 检查
+npm run lint
+
+# Prettier 格式化 / 格式检查
+npm run format
+npm run format:check
 ```
+
+GitHub Actions CI（`.github/workflows/ci.yml`）：typecheck + test + prettier check + lint。
 
 ---
 

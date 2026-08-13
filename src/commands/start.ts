@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { browserManager } from '../lib/browser';
-import { BrowserStateManager } from '../lib/browser';
+import { BrowserStateManager } from '../lib/browser-state';
 
 export function createStartCommand(): Command {
   const command = new Command('start');
@@ -22,7 +22,8 @@ export function createStartCommand(): Command {
         process.removeAllListeners('SIGINT');
         process.removeAllListeners('SIGTERM');
         if (browserManager.isConnected()) {
-          browserManager.shutdown()
+          browserManager
+            .shutdown()
             .then(() => {
               console.log('\n已清理浏览器进程');
               process.exit(130);
@@ -59,7 +60,6 @@ export function createStartCommand(): Command {
         console.log('  shutup  - 关闭浏览器');
         console.log('========================================');
         process.exit(0);
-
       } catch (error) {
         console.error('\n启动浏览器失败:', error);
         process.exit(1);

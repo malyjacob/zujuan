@@ -9,7 +9,16 @@ import { getNodeById, ensureDatabase } from '../lib/knowledge-tree-sqlite';
 
 const PAGE_SIZE = 20;
 
+/** 列表扫描缓存：避免每次请求全量 readdir + JSON.parse + 查库 */
+const SCAN_CACHE_TTL_MS = 5000;
+let scanCache: { outputDir: string; ts: number; entries: ScrapeMeta[] } | null = null;
+
 function scanOutputDir(outputDir: string): ScrapeMeta[] {
+  const now = Date.now();
+  if (scanCache && scanCache.outputDir === outputDir && now - scanCache.ts < SCAN_CACHE_TTL_MS) {
+    return scanCache.entries;
+  }
+
   const results: ScrapeMeta[] = [];
   if (!fs.existsSync(outputDir)) return results;
 
@@ -37,11 +46,15 @@ function scanOutputDir(outputDir: string): ScrapeMeta[] {
         data.options.knowledgePoint = node.name;
       }
       results.push(data.options);
-    } catch {}
+    } catch {
+      // 损坏的结果文件跳过
+    }
   }
 
   // 按时间戳倒序（最新在前）
   results.sort((a, b) => parseInt(b.timestamp) - parseInt(a.timestamp));
+
+  scanCache = { outputDir, ts: now, entries: results };
   return results;
 }
 
@@ -123,7 +136,6 @@ export function createServeCommand(): Command {
     .description('启动静态服务器，展示历史抓取结果（按 Ctrl+C 关闭）')
     .option('-p, --port <port>', '监听端口', '30888')
     .action(async (options: { port?: string }) => {
-
       const port = parseInt(options.port || '30888');
       if (isNaN(port) || port < 1 || port > 65535) {
         console.error('端口无效，请指定 1-65535 之间的数字');

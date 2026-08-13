@@ -1,12 +1,18 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { ScrapeResult, ScrapeMeta, ExportTheme } from '../../types';
-
-const MATHJAX_CDN = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+import { escHtml, markdownToHtml, convertPipeTables, buildTableHtml } from './markdown-to-html';
+import { MATHJAX_CDN, buildQuestionCss, buildServeListCss } from './html-css';
 
 export class HtmlExporter {
   /** 生成单题 HTML 文件，保存到同目录。 */
-  export(batchDir: string, result: ScrapeResult, defaultTheme: ExportTheme = 'light', prevIndex?: string, nextIndex?: string): string {
+  export(
+    batchDir: string,
+    result: ScrapeResult,
+    defaultTheme: ExportTheme = 'light',
+    prevIndex?: string,
+    nextIndex?: string
+  ): string {
     const dir = path.join(batchDir, result.index);
     const htmlPath = path.join(dir, 'index.html');
     const html = this.buildHtml(result, defaultTheme, prevIndex, nextIndex);
@@ -15,7 +21,12 @@ export class HtmlExporter {
   }
 
   /** 生成总览导航页 index.html */
-  exportOverview(batchDir: string, results: ScrapeResult[], meta: ScrapeMeta, defaultTheme: ExportTheme = 'light'): string {
+  exportOverview(
+    batchDir: string,
+    results: ScrapeResult[],
+    meta: ScrapeMeta,
+    defaultTheme: ExportTheme = 'light'
+  ): string {
     const htmlPath = path.join(batchDir, 'index.html');
     const html = this.buildOverviewHtml(results, meta, defaultTheme);
     fs.writeFileSync(htmlPath, html, 'utf-8');
@@ -30,42 +41,7 @@ export class HtmlExporter {
    * @param totalEntries 总条目数
    */
   buildServeListHtml(entries: ScrapeMeta[], page: number, totalPages: number, totalEntries: number): string {
-    const css = `
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; font-size: 15px; line-height: 1.7; background: #f7f7f8; color: #1a1a1a; min-height: 100vh; }
-.container { max-width: 900px; margin: 0 auto; padding: 32px 16px 80px; }
-.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
-.header h1 { font-size: 22px; font-weight: 700; color: #7c3aed; }
-.header a { font-size: 13px; color: #888; text-decoration: none; }
-.header a:hover { color: #7c3aed; }
-.card { background: #fff; border: 1px solid #e5e5e5; border-radius: 12px; overflow: hidden; }
-.card-header { padding: 16px 20px; border-bottom: 1px solid #e5e5e5; display: flex; align-items: center; justify-content: space-between; }
-.card-header h2 { font-size: 15px; font-weight: 600; color: #1a1a1a; }
-.card-header .time { font-size: 12px; color: #888; }
-.entry-list { list-style: none; }
-.entry-item { border-bottom: 1px solid #f0f0f0; }
-.entry-item:last-child { border-bottom: none; }
-.entry-item a { display: flex; align-items: center; gap: 14px; padding: 16px 20px; text-decoration: none; color: #1a1a1a; transition: background .15s; }
-.entry-item a:hover { background: #f9f7ff; }
-.entry-item a:hover .arrow { color: #7c3aed; }
-.info { flex: 1; }
-.grade { font-size: 12px; color: #888; margin-bottom: 2px; }
-.title { font-size: 15px; font-weight: 600; color: #1a1a1a; }
-.meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
-.tag { background: #f3f0ff; border: 1px solid #ddd6fe; color: #5b21b6; font-size: 12px; padding: 2px 10px; border-radius: 20px; }
-.arrow { color: #ccc; font-size: 18px; transition: color .15s; }
-.empty { text-align: center; padding: 60px 20px; color: #888; }
-.empty p { margin-bottom: 12px; font-size: 15px; }
-.empty code { background: #f0f0f0; padding: 2px 8px; border-radius: 4px; font-size: 13px; }
-.pagination { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 24px; }
-.pagination a, .pagination span { display: inline-block; padding: 6px 14px; border-radius: 8px; font-size: 14px; text-decoration: none; }
-.pagination a { background: #f3f0ff; border: 1px solid #ddd6fe; color: #5b21b6; }
-.pagination a:hover { background: #7c3aed; color: #fff; border-color: #7c3aed; }
-.pagination .current { background: #7c3aed; color: #fff; border: 1px solid #7c3aed; }
-.pagination .disabled { opacity: 0.4; pointer-events: none; }
-.pagination .info-text { color: #888; font-size: 13px; }
-`;
-
+    const css = buildServeListCss();
     if (entries.length === 0) {
       return `<!DOCTYPE html>
 <html lang="zh">
@@ -78,11 +54,12 @@ body { font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; fo
 </div></html>`;
     }
 
-    const items = entries.map(e => {
-      const grade = e.grade === 'high' ? '高中' : '初中';
-      const timeStr = e.timestamp ? this.formatTimestamp(e.timestamp) : '';
+    const items = entries
+      .map((e) => {
+        const grade = e.grade === 'high' ? '高中' : '初中';
+        const timeStr = e.timestamp ? this.formatTimestamp(e.timestamp) : '';
 
-      return `<li class="entry-item">
+        return `<li class="entry-item">
   <a href="/${e.timestamp}/index.html">
     <div class="info">
       <div class="grade">${grade} · ${timeStr}</div>
@@ -95,7 +72,8 @@ body { font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; fo
     <span class="arrow">→</span>
   </a>
 </li>`;
-    }).join('');
+      })
+      .join('');
 
     const pageNav = totalPages > 1 ? this.buildPagination(page, totalPages, totalEntries) : '';
 
@@ -124,15 +102,18 @@ body { font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; fo
   private formatTimestamp(ts: string): string {
     const d = new Date(parseInt(ts));
     const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
-      `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    return (
+      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+      `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+    );
   }
 
   private buildPagination(page: number, totalPages: number, totalEntries: number): string {
     const start = (page - 1) * 20 + 1;
     const end = Math.min(page * 20, totalEntries);
     const prev = page > 1 ? `<a href="/?page=${page - 1}">← 上一页</a>` : `<span class="disabled">← 上一页</span>`;
-    const next = page < totalPages ? `<a href="/?page=${page + 1}">下一页 →</a>` : `<span class="disabled">下一页 →</span>`;
+    const next =
+      page < totalPages ? `<a href="/?page=${page + 1}">下一页 →</a>` : `<span class="disabled">下一页 →</span>`;
     return `<div class="pagination">
   ${prev}
   <span class="info-text">第 ${start}-${end} 条，共 ${totalEntries} 条</span>
@@ -149,19 +130,22 @@ body { font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; fo
     if (meta.difficulty) metaParts.push(`难度: ${this.escHtml(meta.difficulty)}`);
     metaParts.push(`数量: ${results.length}`);
 
-    const questionItems = results.map(r => {
-      const difficulty = r.difficulty ? `难度: ${this.escHtml(r.difficulty)}` : '';
-      const scoreRate = r.scoreRate !== undefined ? `得分率: ${r.scoreRate.toFixed(2)}` : '';
-      const keywords = r.knowledgeKeywords.length > 0
-        ? r.knowledgeKeywords.map((kw: string) => `<span class="tag">${this.escHtml(kw)}</span>`).join('')
-        : '';
-      return `<a href="${r.index}/index.html" class="question-item">
+    const questionItems = results
+      .map((r) => {
+        const difficulty = r.difficulty ? `难度: ${this.escHtml(r.difficulty)}` : '';
+        const scoreRate = r.scoreRate !== undefined ? `得分率: ${r.scoreRate.toFixed(2)}` : '';
+        const keywords =
+          r.knowledgeKeywords.length > 0
+            ? r.knowledgeKeywords.map((kw: string) => `<span class="tag">${this.escHtml(kw)}</span>`).join('')
+            : '';
+        return `<a href="${r.index}/index.html" class="question-item">
         <span class="q-index">${r.index}</span>
         <span class="q-meta">${difficulty}${scoreRate ? ' | ' + scoreRate : ''}</span>
         <span class="q-tags">${keywords}</span>
         <span class="q-arrow">→</span>
       </a>`;
-    }).join('');
+      })
+      .join('');
 
     return `<!DOCTYPE html>
 <html lang="zh" data-theme="${defaultTheme}">
@@ -229,20 +213,24 @@ body { font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; fo
     if (r.difficulty) metaRows.push(`<span class="tag">难度: ${this.escHtml(r.difficulty)}</span>`);
     if (r.scoreRate !== undefined) metaRows.push(`<span class="tag">得分率: ${r.scoreRate.toFixed(2)}</span>`);
 
-    const kwBlock = r.knowledgeKeywords.length > 0
-      ? `<div class="knowledge-row">
+    const kwBlock =
+      r.knowledgeKeywords.length > 0
+        ? `<div class="knowledge-row">
            <span class="kw-label">知识点:</span>
            <span class="kw-tags">${r.knowledgeKeywords.map((kw: string) => `<span class="tag">${this.escHtml(kw)}</span>`).join('')}</span>
          </div>`
-      : '';
+        : '';
 
-    const imagesBlock = r.images.length > 0
-      ? `<div class="images-section">
-           ${r.images.map((img: string) => {
-             return `<img src="${this.escHtml(path.basename(img))}" class="example-img" onclick="window.open(this.src,'_blank')" alt="示例图" loading="lazy"/>`;
-           }).join('')}
+    const imagesBlock =
+      r.images.length > 0
+        ? `<div class="images-section">
+           ${r.images
+             .map((img: string) => {
+               return `<img src="${this.escHtml(path.basename(img))}" class="example-img" onclick="window.open(this.src,'_blank')" alt="示例图" loading="lazy"/>`;
+             })
+             .join('')}
          </div>`
-      : '';
+        : '';
 
     const answerBlock = aText
       ? `<div class="foldable-block">
@@ -352,333 +340,40 @@ document.querySelectorAll('.fold-btn').forEach(function(btn) {
   }
 
   private buildCss(): string {
-    return `
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  font-size: 15px; line-height: 1.7;
-  padding: 24px 16px 80px;
-  transition: background .2s, color .2s;
-}
-.container { max-width: 860px; margin: 0 auto; }
-
-/* ─── 主题变量 ─── */
-[data-theme="light"] {
-  --bg: #ffffff;
-  --card-bg: #f7f7f8;
-  --card-border: #e5e5e5;
-  --text: #1a1a1a;
-  --text-muted: #666666;
-  --accent: #7c3aed;
-  --accent-light: #a78bfa;
-  --tag-bg: #f3f0ff;
-  --tag-border: #ddd6fe;
-  --tag-text: #5b21b6;
-  --btn-bg: #f3f0ff;
-  --btn-border: #a78bfa;
-  --img-section-bg: #fafafa;
-  --img-border: #e5e5e5;
-  --switcher-bg: #f7f7f8;
-  --switcher-border: #e5e5e5;
-}
-[data-theme="dark"] {
-  --bg: #0f0f0f;
-  --card-bg: #1a1a1a;
-  --card-border: #2d2d2d;
-  --text: #e5e5e5;
-  --text-muted: #a3a3a3;
-  --accent: #a78bfa;
-  --accent-light: #c4b5fd;
-  --tag-bg: #252525;
-  --tag-border: #3d3d3d;
-  --tag-text: #d4d4d4;
-  --btn-bg: #1e1e1e;
-  --btn-border: #3d3d3d;
-  --img-section-bg: #141414;
-  --img-border: #2d2d2d;
-  --switcher-bg: #141414;
-  --switcher-border: #2d2d2d;
-}
-[data-theme="sepia"] {
-  --bg: #f5f0e8;
-  --card-bg: #faf5eb;
-  --card-border: #d4c8a8;
-  --text: #3d3528;
-  --text-muted: #7a6b50;
-  --accent: #8b6914;
-  --accent-light: #b8860b;
-  --tag-bg: #ede5d0;
-  --tag-border: #c9b88a;
-  --tag-text: #5c4a1e;
-  --btn-bg: #ede5d0;
-  --btn-border: #c9b88a;
-  --img-section-bg: #f0ead9;
-  --img-border: #d4c8a8;
-  --switcher-bg: #ede5d0;
-  --switcher-border: #c9b88a;
-}
-
-/* ─── 主题切换器 ─── */
-.theme-switcher {
-  position: fixed; top: 12px; right: 16px;
-  display: flex; align-items: center; gap: 6px;
-  background: var(--switcher-bg);
-  border: 1px solid var(--switcher-border);
-  border-radius: 8px; padding: 6px 10px;
-  z-index: 100; transition: background .2s, border-color .2s;
-}
-.theme-label { font-size: 12px; color: var(--text-muted); }
-.theme-btn {
-  background: transparent; border: 1px solid transparent;
-  color: var(--text-muted); font-size: 12px;
-  padding: 3px 10px; border-radius: 6px; cursor: pointer;
-  transition: background .15s, color .15s;
-}
-.theme-btn:hover { background: var(--card-border); color: var(--text); }
-.theme-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-
-/* ─── 卡片 ─── */
-.card {
-  background: var(--card-bg); border: 1px solid var(--card-border);
-  border-radius: 10px; overflow: hidden; margin-bottom: 20px;
-  transition: background .2s, border-color .2s;
-}
-.card-header {
-  background: var(--card-bg); border-bottom: 1px solid var(--card-border);
-  padding: 14px 20px;
-}
-.question-title { font-size: 13px; font-weight: 700; color: var(--accent); letter-spacing: .5px; }
-.card-body { padding: 20px; }
-.source { color: var(--text-muted); font-size: 13px; margin-bottom: 14px; }
-.question-text { font-size: 16px; line-height: 2; color: var(--text); margin-bottom: 16px; }
-.question-text p { margin-bottom: 8px; }
-.question-text strong { color: var(--accent); }
-
-/* ─── 标签 ─── */
-.meta-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
-.knowledge-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
-.kw-label { color: var(--text-muted); font-size: 13px; }
-.kw-tags { display: flex; flex-wrap: wrap; gap: 6px; }
-.tag {
-  background: var(--tag-bg); border: 1px solid var(--tag-border);
-  color: var(--tag-text); font-size: 12px;
-  padding: 2px 10px; border-radius: 20px;
-  transition: background .2s, border-color .2s, color .2s;
-}
-
-/* ─── 示例图 ─── */
-.images-section {
-  display: flex; flex-wrap: wrap; gap: 10px;
-  margin: 14px 0; padding: 12px;
-  background: var(--img-section-bg); border-radius: 6px;
-  transition: background .2s;
-}
-.example-img {
-  max-width: 100%; max-height: 280px;
-  border-radius: 6px; cursor: zoom-in;
-  border: 1px solid var(--img-border);
-  transition: border-color .2s;
-}
-
-/* ─── 折叠块 ─── */
-.foldable-block { margin-top: 16px; }
-.fold-btn {
-  width: 100%; background: var(--btn-bg); border: 1px solid var(--btn-border);
-  color: var(--accent); font-size: 14px; font-weight: 600;
-  padding: 10px 16px; border-radius: 8px;
-  cursor: pointer; text-align: left; transition: background .2s, border-color .2s, color .2s;
-}
-.fold-btn:hover { opacity: 0.85; }
-.fold-content { padding: 14px 4px 4px; }
-.answer-text { color: var(--text); font-size: 15px; line-height: 1.9; }
-.answer-text p { margin-bottom: 8px; }
-.answer-text strong { color: var(--accent); }
-.screenshots-section { margin-top: 8px; }
-.screenshot-label { color: var(--text-muted); font-size: 12px; margin-bottom: 4px; }
-.screenshot-img {
-  display: block; max-width: 100%; border-radius: 6px;
-  cursor: zoom-in; border: 1px solid var(--img-border); margin-bottom: 10px;
-  transition: border-color .2s;
-}
-.hidden { display: none; }
-.muted { color: var(--text-muted); font-size: 13px; padding: 8px 4px; }
-mjx-container { overflow-x: auto; overflow-y: hidden; }
-
-/* ─── 表格 ─── */
-table {
-  width: 100%; border-collapse: collapse;
-  margin: 12px 0; font-size: 14px;
-  transition: border-color .2s;
-}
-th, td {
-  border: 1px solid var(--card-border);
-  padding: 8px 12px; text-align: center;
-  transition: border-color .2s, background .2s, color .2s;
-}
-th {
-  background: var(--tag-bg);
-  color: var(--text); font-weight: 600;
-}
-td {
-  background: var(--card-bg);
-  color: var(--text);
-}
-
-/* ─── 上下题导航 ─── */
-.question-nav {
-  display: flex; justify-content: center; align-items: center; gap: 16px;
-  margin-top: 24px; padding: 16px;
-  background: var(--card-bg); border: 1px solid var(--card-border);
-  border-radius: 10px;
-  transition: background .2s, border-color .2s;
-}
-.nav-btn {
-  padding: 8px 20px; border-radius: 8px; font-size: 14px;
-  background: var(--btn-bg); border: 1px solid var(--btn-border);
-  color: var(--accent); text-decoration: none; font-weight: 500;
-  transition: background .15s, border-color .15s, color .15s;
-}
-.nav-btn:hover { opacity: 0.8; background: var(--accent); border-color: var(--accent); color: #fff; }
-.nav-btn.disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
-.nav-btn.home { background: var(--accent); border-color: var(--accent); color: #fff; }
-.nav-btn.home:hover { opacity: 0.85; }
-
-/* ─── 总览页 ─── */
-.back-link { margin-bottom: 16px; }
-.back-link a { font-size: 14px; color: var(--accent); text-decoration: none; }
-.back-link a:hover { text-decoration: underline; }
-.overview-title { font-size: 18px; font-weight: 700; color: var(--accent); margin-bottom: 8px; }
-.meta-info { color: var(--text-muted); font-size: 13px; }
-.question-list { display: flex; flex-direction: column; gap: 8px; }
-.question-item {
-  display: flex; align-items: center; gap: 12px;
-  padding: 14px 18px; background: var(--card-bg);
-  border: 1px solid var(--card-border); border-radius: 8px;
-  text-decoration: none; color: var(--text);
-  transition: background .15s, border-color .15s;
-}
-.question-item:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
-.question-item:hover .q-arrow { color: #fff; }
-.question-item:hover .tag { background: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.3); color: #fff; }
-.q-index { font-weight: 700; color: var(--accent); font-size: 15px; min-width: 40px; }
-.question-item:hover .q-index { color: #fff; }
-.q-meta { color: var(--text-muted); font-size: 13px; flex: 1; }
-.question-item:hover .q-meta { color: rgba(255,255,255,0.85); }
-.q-tags { display: flex; flex-wrap: wrap; gap: 6px; flex: 2; }
-.q-arrow { color: var(--text-muted); font-size: 16px; }
-`;
+    return buildQuestionCss();
   }
 
   private buildScreenshotsHtml(r: ScrapeResult): string {
     const parts: string[] = [];
     if (r.questionPath) {
-      parts.push(`<p class="screenshot-label">题目截图</p><img src="${this.escHtml(path.basename(r.questionPath))}" class="screenshot-img" onclick="window.open(this.src,'_blank')" alt="题目截图" loading="lazy"/>`);
+      parts.push(
+        `<p class="screenshot-label">题目截图</p><img src="${this.escHtml(path.basename(r.questionPath))}" class="screenshot-img" onclick="window.open(this.src,'_blank')" alt="题目截图" loading="lazy"/>`
+      );
     }
     if (r.answerPath) {
-      parts.push(`<p class="screenshot-label">答案截图</p><img src="${this.escHtml(path.basename(r.answerPath))}" class="screenshot-img" onclick="window.open(this.src,'_blank')" alt="答案截图" loading="lazy"/>`);
+      parts.push(
+        `<p class="screenshot-label">答案截图</p><img src="${this.escHtml(path.basename(r.answerPath))}" class="screenshot-img" onclick="window.open(this.src,'_blank')" alt="答案截图" loading="lazy"/>`
+      );
     }
     return parts.length > 0 ? parts.join('') : '<p class="muted">（无截图）</p>';
   }
 
   private markdownToHtml(md: string): string {
-    // 第一步：提取并转换 Markdown 表格（pipe table），防止被后续段落拆分破坏
-    let result = this._convertPipeTables(md);
-
-    // 第二步：标准 Markdown 内联语法
-    result = result
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/^### (.+)$/gm, '<h4>$1</h4>')
-      .replace(/^## (.+)$/gm, '<h3>$1</h3>')
-      .replace(/^# (.+)$/gm, '<h2>$1</h2>');
-
-    // 第三步：段落拆分（表格已被替换为 <table>，不会被拆分）
-    result = result
-      .split(/\n\n+/)
-      .map(block => {
-        block = block.trim();
-        if (!block) return '';
-        if (block.startsWith('<p') || block.startsWith('<h') || block.startsWith('<table')) return block;
-        return `<p>${block.replace(/\n/g, '<br/>')}</p>`;
-      })
-      .filter(Boolean)
-      .join('\n');
-
-    return result;
+    return markdownToHtml(md);
   }
 
   /** 将 Markdown pipe table（管道表格）转换为 HTML <table> */
   private _convertPipeTables(md: string): string {
-    const lines = md.split('\n');
-    const result: string[] = [];
-    let i = 0;
-
-    while (i < lines.length) {
-      const line = lines[i];
-      // 检测表格开始：当前行以 | 开头，且下一行是分隔行（|---|）
-      if (line.trimStart().startsWith('|') && i + 1 < lines.length) {
-        const nextLine = lines[i + 1];
-        const sepMatch = nextLine.match(/^\|?[\s]*(:?-{3,}:?[\s]*\|?)+[\s]*$/);
-        if (sepMatch) {
-          // 收集整个表格所有行
-          const tableRows: string[] = [line];
-          i++;
-          while (i < lines.length && lines[i].trimStart().startsWith('|')) {
-            tableRows.push(lines[i]);
-            i++;
-          }
-          result.push(this._buildTableHtml(tableRows));
-          continue;
-        }
-      }
-      result.push(line);
-      i++;
-    }
-
-    return result.join('\n');
+    return convertPipeTables(md);
   }
 
   /** 将 pipe table 行数组转为 <table> HTML */
   private _buildTableHtml(rows: string[]): string {
-    // 第一行 = 表头，第二行 = 分隔符，后续行 = 数据
-    const headerRow = rows[0];
-    const dataRows = rows.slice(2); // 跳过表头和分隔行
-
-    const cells = (row: string): string[] => {
-      return row
-        .split('|')
-        .map(c => c.trim())
-        .filter((_, idx, arr) => idx > 0 && idx < arr.length - 1); // 去掉首尾空
-    };
-
-    const headers = cells(headerRow);
-
-    let html = '<table>\n';
-    // 表头
-    html += '  <thead>\n    <tr>';
-    for (const h of headers) {
-      html += `<th>${h}</th>`;
-    }
-    html += '</tr>\n  </thead>\n';
-    // 表体
-    if (dataRows.length > 0) {
-      html += '  <tbody>\n';
-      for (const row of dataRows) {
-        const rowCells = cells(row);
-        html += '    <tr>';
-        for (const c of rowCells) {
-          html += `<td>${c}</td>`;
-        }
-        html += '</tr>\n';
-      }
-      html += '  </tbody>\n';
-    }
-    html += '</table>';
-
-    return html;
+    return buildTableHtml(rows);
   }
 
   private escHtml(str: string): string {
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    return escHtml(str);
   }
 }
 

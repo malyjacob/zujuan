@@ -65,8 +65,8 @@ export type QuestionType = 't1' | 't2' | 't3' | 't4' | 't5' | 't6';
 // 题目难度
 export type Difficulty = 'd1' | 'd2' | 'd3' | 'd4' | 'd5';
 
-// 年份
-export type Year = 2023 | 2024 | 2025 | 2026 | -1;
+// 年份（-1 表示更早年份；运行时校验见 UrlBuilder.validateYear）
+export type Year = number;
 
 // 年级: high=高中, middle=初中
 export type Grade = 'high' | 'middle';
@@ -77,7 +77,7 @@ export type ExportFormat = 'html' | 'markdown' | 'both';
 // 导出主题: light=白底黑字, dark=深色, sepia=护眼米黄
 export type ExportTheme = 'light' | 'dark' | 'sepia';
 
-// 排序方式: latest=最新(o2), hot=最热(o4), comprehensive=综合(o0)
+// 排序方式: latest=最新(o2), hot=最热(o1), comprehensive=综合(o0)
 export type Order = 'latest' | 'hot' | 'comprehensive';
 
 // 来源
@@ -112,32 +112,32 @@ export interface ScrapeOptions {
 
 // 抓取结果
 export interface ScrapeMeta {
-  timestamp: string;        // 目录名，本次抓取的输出目录（必填）
-  knowledgeId: string;      // 知识点节点ID
-  knowledgePoint: string;   // 知识点名称
-  grade: string;          // 年级段：高中/初中（必填）
-  type?: string;         // 题型：单选题/多选题/填空题/解答题
-  difficulty?: string;   // 难度：容易/较易/适中/较难/困难
-  year?: number;         // 年份（含 -1 表示更早年份）
-  order: string;         // 排序方式：最新/最热/综合（必填）
-  multiCount?: number;   // 多选题答案数量
-  fillCount?: number;    // 填空题空数
-  page?: number;         // 分页页码
+  timestamp: string; // 目录名，本次抓取的输出目录（必填）
+  knowledgeId: string; // 知识点节点ID
+  knowledgePoint: string; // 知识点名称
+  grade: string; // 年级段：高中/初中（必填）
+  type?: string; // 题型：单选题/多选题/填空题/解答题
+  difficulty?: string; // 难度：容易/较易/适中/较难/困难
+  year?: number; // 年份（含 -1 表示更早年份）
+  order: string; // 排序方式：最新/最热/综合（必填）
+  multiCount?: number; // 多选题答案数量
+  fillCount?: number; // 填空题空数
+  page?: number; // 分页页码
 }
 
 export interface ScrapeResult {
   id: string;
-  index: string;            // 题目序号（补零对齐，如 "001"）
-  questionPath: string;    // 相对于 {timestamp}/ 目录的路径，如 "001/question.png"
+  index: string; // 题目序号（补零对齐，如 "001"）
+  questionPath: string; // 相对于 {timestamp}/ 目录的路径，如 "001/question.png"
   answerPath: string;
   images: string[];
-  source?: string;           // 来源
-  questionType?: string;      // 题型
-  difficulty?: string;        // 难度
-  scoreRate?: number;         // 得分率（0~1）
+  source?: string; // 来源
+  questionType?: string; // 题型
+  difficulty?: string; // 难度
+  scoreRate?: number; // 得分率（0~1）
   knowledgeKeywords: string[]; // 涉及到的知识点关键词列表
-  questionText?: string;       // 视觉模型识别的题目文字（Markdown 格式）
-  answerText?: string;         // 视觉模型识别的答案文字（Markdown 格式，忽略几何图）
+  questionText?: string; // 视觉模型识别的题目文字（Markdown 格式）
+  answerText?: string; // 视觉模型识别的答案文字（Markdown 格式，忽略几何图）
   timestamp: string;
 }
 
@@ -154,4 +154,3 @@ export interface BrowserState {
   port: number;
   startedAt: string;
 }
-

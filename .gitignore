@@ -28,3 +28,6 @@ package-lock.json
 
 # log File
 *.log
+
+# temporary local todo (not tracked)
+IMPROVEMENTS.todo.md

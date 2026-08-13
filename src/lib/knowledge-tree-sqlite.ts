@@ -100,9 +100,7 @@ function _getDb(): Database.Database {
  *  触发重建的条件：目录路径变更 OR 数据库为空（兜底所有初始化失败的情况） */
 function needsRebuild(): boolean {
   const database = _getDb();
-  const row = database.prepare('SELECT value FROM meta WHERE key = ?').get('tree_dir') as
-    | { value: string }
-    | undefined;
+  const row = database.prepare('SELECT value FROM meta WHERE key = ?').get('tree_dir') as { value: string } | undefined;
   const storedDir = (row?.value || '').replace(/\\/g, '/');
   const currentDir = getTreeDir();
 
@@ -110,11 +108,7 @@ function needsRebuild(): boolean {
   if (storedDir !== currentDir) return true;
 
   // 路径一致但表里没数据 → 也要重建（兜底）
-  const count = (
-    database
-      .prepare('SELECT COUNT(*) as c FROM knowledge_nodes')
-      .get() as { c: number }
-  ).c;
+  const count = (database.prepare('SELECT COUNT(*) as c FROM knowledge_nodes').get() as { c: number }).c;
   return count === 0;
 }
 
@@ -160,13 +154,11 @@ export function importTreeFromFile(grade: 'high' | 'middle'): number {
 
   // 解析并构建带层级的节点列表
   const parsed: { name: string; id: string; level: number }[] = [];
-  let lineIndex = 0;
   for (const line of lines) {
     const node = parseNodeLine(line);
     if (!node) continue;
     const level = Math.floor((line.search(/\S/) || 0) / 2);
     parsed.push({ ...node, level });
-    lineIndex++;
   }
 
   // 建立父子关系，同时记录行号位置（用于同层排序）
@@ -186,9 +178,7 @@ export function importTreeFromFile(grade: 'high' | 'middle'): number {
   insertAll(rows);
 
   // 写入元数据：记录本次导入使用的树文件目录
-  database
-    .prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)')
-    .run('tree_dir', getTreeDir());
+  database.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('tree_dir', getTreeDir());
 
   return rows.length;
 }
@@ -210,9 +200,8 @@ export function ensureDatabase(): void {
 
 /** 查询单个节点 */
 export function getNodeById(id: string, grade: 'high' | 'middle'): KnowledgeNodeRow | null {
-  const row = _getDb()
-    .prepare('SELECT * FROM knowledge_nodes WHERE id = ? AND grade = ?')
-    .get(id, grade) as KnowledgeNodeRow | undefined;
+  const row = _getDb().prepare('SELECT * FROM knowledge_nodes WHERE id = ? AND grade = ?').get(id, grade) as
+    KnowledgeNodeRow | undefined;
   return row || null;
 }
 
@@ -227,9 +216,8 @@ export function getDescendants(
   const results: NodeWithLevel[] = [];
 
   // 首先查询根节点自身（level=0）
-  const rootNode = database
-    .prepare('SELECT * FROM knowledge_nodes WHERE id = ? AND grade = ?')
-    .get(nodeId, grade) as KnowledgeNodeRow | undefined;
+  const rootNode = database.prepare('SELECT * FROM knowledge_nodes WHERE id = ? AND grade = ?').get(nodeId, grade) as
+    KnowledgeNodeRow | undefined;
 
   if (rootNode) {
     results.push({ node: rootNode, level: 0 });
@@ -322,7 +310,8 @@ export function getDescendantsFromRoots(
   const lower = searchTerm.toLowerCase();
   const maxDepthCond = maxDepth === -1 ? '' : `AND display_level <= ${maxDepth}`;
   const rows = database
-    .prepare(`
+    .prepare(
+      `
       WITH RECURSIVE chain(id, name, parent_id, grade, level, display_level, pos) AS (
         SELECT id, name, parent_id, grade, level, 1 AS display_level, pos
         FROM knowledge_nodes
@@ -337,7 +326,8 @@ export function getDescendantsFromRoots(
       FROM chain
       WHERE name LIKE ? ${maxDepthCond}
       ORDER BY display_level, pos
-    `)
+    `
+    )
     .all(grade, grade, `%${lower}%`) as (KnowledgeNodeRow & { display_level: number })[];
 
   if (rows.length === 0) return [];
@@ -353,10 +343,7 @@ export function getDescendantsFromRoots(
 }
 
 /** 获取节点的父节点链（用于显示路径） */
-export function getNodePath(
-  nodeId: string,
-  grade: 'high' | 'middle' = 'high'
-): KnowledgeNodeRow[] {
+export function getNodePath(nodeId: string, grade: 'high' | 'middle' = 'high'): KnowledgeNodeRow[] {
   const path: KnowledgeNodeRow[] = [];
   let current = getNodeById(nodeId, grade);
   while (current) {
@@ -368,10 +355,7 @@ export function getNodePath(
 }
 
 /** 全局搜索：模糊匹配名称 */
-export function searchNodes(
-  searchTerm: string,
-  grade: 'high' | 'middle' = 'high'
-): KnowledgeNodeRow[] {
+export function searchNodes(searchTerm: string, grade: 'high' | 'middle' = 'high'): KnowledgeNodeRow[] {
   const lower = searchTerm.toLowerCase();
   return _getDb()
     .prepare('SELECT * FROM knowledge_nodes WHERE name LIKE ? AND grade = ?')
@@ -392,11 +376,7 @@ export function printNodesWithLevels(nodesWithLevels: NodeWithLevel[]): void {
  * @param maxDisplayLevel 最大打印深度（-1=不限）
  * @param rootId 可选：从指定节点开始打印（用于 --id 场景，忽略其他根节点）
  */
-export function printTree(
-  nodesWithLevels: NodeWithLevel[],
-  maxDisplayLevel: number = -1,
-  rootId?: string
-): void {
+export function printTree(nodesWithLevels: NodeWithLevel[], maxDisplayLevel: number = -1, rootId?: string): void {
   // 第一遍：建立 parent_id → children[] 的映射（children 按 pos 排序）
   const childrenMap = new Map<string | null, KnowledgeNodeRow[]>();
 

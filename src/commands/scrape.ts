@@ -3,6 +3,8 @@ import * as path from 'path';
 import { scraperEngine } from '../lib/scraper';
 import { configManager } from '../lib/config';
 import { logger } from '../lib/logger';
+import { LoginExpiredError } from '../lib/errors';
+import { buildTypeHelp, buildDifficultyHelp, ORDER_NAMES } from '../lib/mappings';
 import { htmlExporter } from '../lib/exporters/html-exporter';
 import { markdownExporter } from '../lib/exporters/markdown-exporter';
 import {
@@ -23,8 +25,8 @@ export function createScrapeCommand(): Command {
   command
     .description('抓取题目')
     .requiredOption('-k, --knowledge <id>', '知识点节点ID（必填）')
-    .option('-t, --type <type>', '题型: t1=单选 t2=多选 t3=填空 t4=解答 t5=判断 t6=概念填空')
-    .option('-d, --difficulty <level>', '难度: d1=容易 d2=较易 d3=适中 d4=较难 d5=困难')
+    .option('-t, --type <type>', `题型: ${buildTypeHelp()}`)
+    .option('-d, --difficulty <level>', `难度: ${buildDifficultyHelp()}`)
     .option('-y, --year <year>', '年份: 2026/2025/2024/2023/-1（-1表示更早）')
     .option('-g, --grade <grade>', '年级: high=高中 middle=初中（默认: 配置中的 grade）')
     .option('-r, --order <order>', '排序: latest=最新 hot=最热 comprehensive=综合（默认: 配置中的 order）')
@@ -47,7 +49,7 @@ export function createScrapeCommand(): Command {
         knowledge: options.knowledge,
         type: options.type as QuestionType | undefined,
         difficulty: options.difficulty as Difficulty | undefined,
-        year: options.year ? parseInt(options.year) as Year : undefined,
+        year: options.year ? (parseInt(options.year) as Year) : undefined,
         grade,
         order,
         limit,
@@ -58,10 +60,17 @@ export function createScrapeCommand(): Command {
       };
 
       const gradeName = grade === 'high' ? '高中' : '初中';
-      const orderName = { latest: '最新', hot: '最热', comprehensive: '综合' }[order];
+      const orderName = ORDER_NAMES[order];
 
       const logLevel = scrapeOptions.logLevel || 'quiet';
       logger.setLevel(logLevel);
+
+      if (scrapeOptions.type === 't5' || scrapeOptions.type === 't6') {
+        logger.log(
+          'normal',
+          `注意：${scrapeOptions.type} 题型暂不支持 URL 筛选（站点无对应题型码），将抓取该知识点全部题型`
+        );
+      }
 
       logger.log('normal', '开始抓取题目...');
       logger.log('normal', `知识点: ${scrapeOptions.knowledge}`);
@@ -83,7 +92,12 @@ export function createScrapeCommand(): Command {
 
         process.exit(0);
       } catch (error) {
-        logger.error('抓取失败:', error);
+        if (error instanceof LoginExpiredError) {
+          // 登录失效：只打印友好提示，不输出堆栈
+          console.error(error.message);
+        } else {
+          logger.error('抓取失败:', error);
+        }
         process.exit(1);
       }
     });
@@ -95,7 +109,7 @@ export function createScrapeCommand(): Command {
     // format：命令行 > config > 默认 both
     let fmt: 'html' | 'markdown' | 'both' = 'both';
     if (opts.format) {
-      const parts = (opts.format as string).split(',').map(s => s.trim());
+      const parts = (opts.format as string).split(',').map((s) => s.trim());
       if (parts.includes('html') && parts.includes('markdown')) {
         fmt = 'both';
       } else if (parts.includes('markdown')) {
@@ -116,10 +130,12 @@ export function createScrapeCommand(): Command {
     const batchDir = path.resolve(configManager.get('outputDir'), output.options.timestamp);
     const { options: meta, results } = output;
 
-    let htmlCount = 0, mdCount = 0, zipCount = 0;
+    let htmlCount = 0,
+      mdCount = 0,
+      zipCount = 0;
 
     // 建立索引映射，便于确定上下题
-    const indexMap = results.map(r => r.index);
+    const indexMap = results.map((r) => r.index);
 
     for (let i = 0; i < results.length; i++) {
       const result = results[i];

@@ -20,10 +20,11 @@ function resolveBatchDir(target?: string): string | null {
   }
 
   if (!fs.existsSync(outputDir)) return null;
-  const entries = fs.readdirSync(outputDir, { withFileTypes: true })
-    .filter(e => e.isDirectory())
-    .map(e => ({ name: e.name, mtime: fs.statSync(path.join(outputDir, e.name)).mtimeMs }))
-    .filter(e => !isNaN(parseInt(e.name)))
+  const entries = fs
+    .readdirSync(outputDir, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => ({ name: e.name, mtime: fs.statSync(path.join(outputDir, e.name)).mtimeMs }))
+    .filter((e) => !isNaN(parseInt(e.name)))
     .sort((a, b) => b.mtime - a.mtime);
 
   if (entries.length === 0) return null;
@@ -64,7 +65,7 @@ export function createExportCommand(): Command {
       // 解析 format：命令行 > config > 默认 both
       let fmt: 'html' | 'markdown' | 'both' = 'both';
       if (options.format) {
-        const parts = (options.format as string).split(',').map(s => s.trim());
+        const parts = (options.format as string).split(',').map((s) => s.trim());
         if (parts.includes('html') && parts.includes('markdown')) {
           fmt = 'both';
         } else if (parts.includes('markdown')) {
@@ -82,7 +83,9 @@ export function createExportCommand(): Command {
       }
 
       // 解析 theme：命令行 > 默认 light
-      const theme: ExportTheme = (['dark', 'sepia'].includes(options.theme as string) ? options.theme : 'light') as ExportTheme;
+      const theme: ExportTheme = (
+        ['dark', 'sepia'].includes(options.theme as string) ? options.theme : 'light'
+      ) as ExportTheme;
 
       console.log(`输出目录: ${batchDir}`);
       console.log(`导出格式: ${fmt}`);
@@ -90,10 +93,12 @@ export function createExportCommand(): Command {
       console.log(`题目数量: ${output.results.length}`);
 
       const { options: meta, results } = output;
-      let htmlCount = 0, mdCount = 0, zipCount = 0;
+      let htmlCount = 0,
+        mdCount = 0,
+        zipCount = 0;
 
       // 导出时建立索引映射，便于确定上下题
-      const indexMap = results.map(r => r.index);
+      const indexMap = results.map((r) => r.index);
 
       for (let i = 0; i < results.length; i++) {
         const result = results[i];

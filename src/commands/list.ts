@@ -29,7 +29,8 @@ export function createListCommand(): Command {
 
       // --refresh：强制重建数据库
       if (options.refresh) {
-        let highCount = 0, middleCount = 0;
+        let highCount = 0,
+          middleCount = 0;
         try {
           highCount = importTreeFromFile('high');
         } catch (e: any) {

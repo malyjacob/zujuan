@@ -29,7 +29,11 @@ export class VisionOCRProcessor {
 
   /** 去掉 Markdown 代码块包裹符号 */
   private stripCodeBlocks(content: string): string {
-    return content.replace(/^```markdown\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/, '').trim();
+    return content
+      .replace(/^```markdown\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/\s*```$/, '')
+      .trim();
   }
 
   /** 从文件路径判断 MIME 类型 */
@@ -49,7 +53,7 @@ export class VisionOCRProcessor {
    * 调用视觉模型识别图片中的文字，返回 Markdown 格式内容。
    * 数学公式使用 LaTeX 语法输出。
    */
-  async imageToMarkdown(imagePath: string): Promise<string> {
+  async imageToMarkdown(imagePath: string, options?: { signal?: AbortSignal }): Promise<string> {
     const apiUrl = configManager.get('visionApiUrl');
     const apiKey = configManager.get('visionApiKey');
     const model = configManager.get('visionModel');
@@ -63,27 +67,30 @@ export class VisionOCRProcessor {
 
     const client = this.buildClient(apiUrl, apiKey);
 
-    const response = await client.chat.completions.create({
-      model,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: '请识别这张数学题目图片中的所有文字内容，并使用 Markdown 格式输出。数学公式请使用 LaTeX 语法（用 $ 或 $$ 包裹）。只输出题目本身，不要输出答案。',
-            },
-            {
-              type: 'image_url',
-              image_url: {
-                url: `data:${mimeType};base64,${base64Data}`,
+    const response = await client.chat.completions.create(
+      {
+        model,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: '请识别这张数学题目图片中的所有文字内容，并使用 Markdown 格式输出。数学公式请使用 LaTeX 语法（用 $ 或 $$ 包裹）。只输出题目本身，不要输出答案。',
               },
-            },
-          ],
-        },
-      ],
-      max_tokens: 4096,
-    });
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:${mimeType};base64,${base64Data}`,
+                },
+              },
+            ],
+          },
+        ],
+        max_tokens: 4096,
+      },
+      { signal: options?.signal }
+    );
 
     const content = response.choices[0]?.message?.content;
     if (!content) {
@@ -98,7 +105,7 @@ export class VisionOCRProcessor {
    * 识别答案图片中的文字，忽略几何示意图、函数图像、坐标系图等。
    * 只转写选项、解析、点评等纯文字内容。
    */
-  async answerToMarkdown(imagePath: string): Promise<string> {
+  async answerToMarkdown(imagePath: string, options?: { signal?: AbortSignal }): Promise<string> {
     const apiUrl = configManager.get('visionApiUrl');
     const apiKey = configManager.get('visionApiKey');
     const model = configManager.get('visionModel');
@@ -112,27 +119,30 @@ export class VisionOCRProcessor {
 
     const client = this.buildClient(apiUrl, apiKey);
 
-    const response = await client.chat.completions.create({
-      model,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: '请识别这张图片中的所有文字内容，**忽略**所有几何示意图、函数图像、坐标系图、填充区域图等图形内容，只转写纯文字（如选项、答案编号、解析步骤、点评等）。使用 Markdown 格式输出。',
-            },
-            {
-              type: 'image_url',
-              image_url: {
-                url: `data:${mimeType};base64,${base64Data}`,
+    const response = await client.chat.completions.create(
+      {
+        model,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: '请识别这张图片中的所有文字内容，**忽略**所有几何示意图、函数图像、坐标系图、填充区域图等图形内容，只转写纯文字（如选项、答案编号、解析步骤、点评等）。使用 Markdown 格式输出。',
               },
-            },
-          ],
-        },
-      ],
-      max_tokens: 4096,
-    });
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:${mimeType};base64,${base64Data}`,
+                },
+              },
+            ],
+          },
+        ],
+        max_tokens: 4096,
+      },
+      { signal: options?.signal }
+    );
 
     const content = response.choices[0]?.message?.content;
     if (!content) {

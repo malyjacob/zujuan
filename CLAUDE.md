@@ -29,8 +29,9 @@ zujuan scrape -k <知识点ID> [options]
 
 **常用参数：**
 - `-g <grade>` — 年级：`high`=高中（默认）`middle`=初中
-- `-t <type>` — 题型：`t1`=单选 `t2`=多选 `t3`=填空 `t4`=解答
+- `-t <type>` — 题型：`t1`=单选 `t2`=多选 `t3`=填空 `t4`=解答（`t5`/`t6` 站点无题型码，不支持 URL 筛选，传入时会提示并抓取全部题型）
 - `-d <level>` — 难度：`d1`~`d5`
+- `-y <year>` — 年份：如 `2024`；`-1` 表示更早年份
 - `-r <order>` — 排序：`latest`=最新 `hot`=最热 `comprehensive`=综合
 - `-l <n>` — 抓取数量（1-10）
 - `-mc <n>` — 多选题答案数量（2/3/4+）
@@ -108,17 +109,7 @@ zujuan list --id zsd28279 --depth 3
 zujuan list --refresh
 ```
 
-### 7. 交互式知识点浏览器（TUI）
-
-```bash
-zujuan browse                  # 启动高中知识点浏览器
-zujuan browse -g middle       # 初中知识点浏览器
-zujuan browse -i zsd28279    # 从指定节点开始浏览
-```
-
-键盘操作：`↑↓` 移动 `←→` 展开/折叠 `/` 搜索 `n` 下一匹配 `q` 退出
-
-### 8. 静态服务器（浏览历史结果）
+### 7. 静态服务器（浏览历史结果）
 
 ```bash
 zujuan serve                  # 启动服务器（默认端口 30888）
@@ -139,27 +130,45 @@ src/
 │   ├── serve.ts              # serve 命令：静态服务器，展示历史抓取结果
 │   ├── shutup.ts             # shutup 命令：关闭浏览器
 │   ├── config.ts             # config 命令：查看/修改配置
-│   ├── list.ts               # list 命令：搜索/查看知识点（SQLite）
-│   └── browse.ts              # browse 命令：交互式 TUI 知识点浏览器
+│   └── list.ts               # list 命令：搜索/查看知识点（SQLite）
 ├── lib/
-│   ├── browser.ts            # BrowserManager：Playwright 浏览器生命周期管理
-│   ├── scraper.ts            # ScraperEngine：题目抓取核心逻辑
-│   ├── vision-ocr.ts         # 视觉大模型 OCR 识别封装（题目+答案，30s 单次超时）
+│   ├── browser.ts            # BrowserManager：Playwright 浏览器生命周期管理（CDP 连接）
+│   ├── browser-state.ts      # BrowserStateManager：浏览器状态文件读写
+│   ├── browser-detect.ts     # Chrome/Chromium 路径跨平台自动检测
+│   ├── scraper.ts            # ScraperEngine：题目抓取核心逻辑（依赖注入，五阶段流水线）
+│   ├── vision-ocr.ts         # 视觉大模型 OCR 识别封装（题目+答案，30s 单次超时，支持 signal 取消）
 │   ├── url-builder.ts        # URL 构建，按年级/题型/难度等生成目标 URL
+│   ├── mappings.ts           # 题型码/中文名/难度/排序等语义映射集中管理
+│   ├── errors.ts             # LoginExpiredError 等业务异常
+│   ├── logger.ts             # Logger：console 分级输出 + zujuan.log 文件 sink
 │   ├── config.ts             # ConfigManager：配置文件读写
 │   ├── discord-notifier.ts   # Discord Webhook 通知：扫码登录时发送二维码
-│   ├── knowledge-tree.ts     # 旧版树解析（保留）
-│   ├── knowledge-tree-sqlite.ts # SQLite 版树存储（list/browse/serve 使用）
+│   ├── knowledge-tree-sqlite.ts # SQLite 版树存储（list/serve 使用）
 │   └── exporters/
 │       ├── html-exporter.ts   # HTML 导出（三种主题 + MathJax + 主题切换按钮）
+│       ├── html-css.ts        # 导出页面 CSS 模板（主题经 [data-theme] CSS 变量切换）
+│       ├── markdown-to-html.ts # Markdown→HTML 纯函数转换（pipe table/标题/段落/转义）
 │       └── markdown-exporter.ts # Markdown 导出（YAML frontmatter + zip 打包）
-├── ui/
-│   ├── index.ts              # TUI 主入口（blessed 事件循环）
-│   ├── tree.ts               # TreeState：树状态管理（展开/折叠/搜索）
-│   └── widgets.ts            # blessed 组件创建和渲染函数
 └── types/
     └── index.ts              # TypeScript 类型定义
+
+tests/
+├── url-builder.test.ts       # URL 构建规则单测
+└── markdown-to-html.test.ts  # Markdown 转换单测
 ```
+
+### 开发与质量命令
+
+```bash
+npm run typecheck     # tsc --noEmit 类型检查
+npm test              # node:test 单元测试（ts-node 运行）
+npm run lint          # eslint src tests
+npm run format        # prettier 格式化 src tests
+npm run format:check  # prettier 格式检查（CI 门槛）
+npm run build         # tsc 构建到 dist/
+```
+
+GitHub Actions CI（`.github/workflows/ci.yml`）：typecheck + test + prettier check + lint。
 
 ## 关键逻辑说明
 
@@ -168,7 +177,7 @@ src/
 1. **连接浏览器** — `browserManager.connect()` 通过 CDP 连接到已运行的 Chrome
 2. **访问 URL** — 视口设为 1920×1080，访问 `UrlBuilder` 生成的目标 URL
 3. **登录检测** — 检查页面顶栏 `a.login-btn` 是否存在，存在则说明未登录/登录已过期，退出并提示重新 `start`
-4. **滚动加载** — 滚动到底部触发懒加载，等待题目列表完整渲染
+4. **滚动加载** — 自适应滚动到底部触发懒加载，直到页面高度不再变化（上限 10 轮）
 5. **批量截图** — 用 `$$` 获取所有 `div.tk-quest-item.quesroot` 句柄，逐题处理：
    - 滚动到题目位置
    - 截取 `div.exam-item__cnt`（仅题目内容区域）
@@ -178,7 +187,7 @@ src/
 7. **并行视觉 OCR** — `visionEnabled=true` 时并行调用视觉模型：
    - 题目图片 → `VisionOCRProcessor.imageToMarkdown()`（Markdown 输出，LaTeX 公式）
    - 答案图片 → `VisionOCRProcessor.answerToMarkdown()`（忽略几何图，Markdown 输出）
-   - 单次请求 30 秒超时，120 秒全局超时兜底（超时后跳过剩余 OCR 任务）
+   - 单次请求 30 秒超时，120 秒全局超时兜底（超时后通过 AbortSignal 取消剩余 OCR 任务）
 8. **保存结果** — 输出 JSON 到 `{timestamp}/results.json`，每题图片存入 `{timestamp}/{index}/`
 
 ### 输出目录结构
@@ -217,6 +226,8 @@ results.json 中图片路径均为相对于时间戳目录的相对路径（如 
 | 解答 t4 | 2703 | 1103 |
 
 排序码：最新=`o2`，最热=`o1`，综合=`o0`
+
+年份 `-1`（更早年份）生成 `y-1` 段，例如 `y-1o2`。
 
 ### 文件持久化
 

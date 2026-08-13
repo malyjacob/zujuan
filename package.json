@@ -8,8 +8,13 @@
   },
   "scripts": {
     "build": "tsc",
-    "start": "NODE_OPTIONS='--no-deprecation' node ./dist/index.js",
+    "start": "cross-env NODE_OPTIONS=--no-deprecation node ./dist/index.js",
     "dev": "ts-node src/index.ts",
+    "test": "node --require ts-node/register --test tests/url-builder.test.ts tests/markdown-to-html.test.ts",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write src tests",
+    "format:check": "prettier --check src tests",
+    "lint": "eslint src tests",
     "postinstall": "node -e \"const fs=require('fs'),path=require('path'),os=require('os');const pkgDir=path.dirname(require.resolve('./package.json'));const destDir=path.join(os.homedir(),'.zujuan-scraper');if(!fs.existsSync(destDir))fs.mkdirSync(destDir,{recursive:true});['KNOWLEDGE_TREE_HIGH.txt','KNOWLEDGE_TREE_MIDDLE.txt'].forEach(f=>{const src=path.join(pkgDir,f);const dst=path.join(destDir,f);if(fs.existsSync(src)){fs.copyFileSync(src,dst);console.log('[postinstall] copied:',f);}else{console.error('[postinstall] 文件不存在，跳过:', src);}});\""
   },
   "keywords": [
@@ -22,18 +27,22 @@
   "license": "MIT",
   "dependencies": {
     "@types/better-sqlite3": "^7.6.13",
-    "@types/blessed": "^0.1.27",
     "archiver": "^7.0.1",
     "better-sqlite3": "^12.8.0",
-    "blessed": "^0.1.81",
     "commander": "^12.0.0",
     "openai": "^4.0.0",
     "playwright": "^1.40.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/archiver": "^7.0.0",
     "@types/node": "^20.0.0",
+    "cross-env": "^10.1.0",
+    "eslint": "^10.8.1",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.6",
     "ts-node": "^10.9.0",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "typescript-eslint": "^8.67.0"
   }
 }
