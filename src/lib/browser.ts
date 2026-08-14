@@ -183,7 +183,8 @@ export class BrowserManager {
         this.context = await this.browser.newContext();
         this.page = await this.context.newPage();
       }
-      // 访问初始页面前先应用 Cookie
+      // 访问初始页面前先恢复 storage-state Cookie，再应用配置 Cookie
+      await this.applyStorageStateCookies();
       await this.applyConfigCookies();
       await this.page.goto('https://zujuan.xkw.com', { waitUntil: 'domcontentloaded' });
       await this.page.waitForTimeout(2000);
@@ -282,6 +283,35 @@ export class BrowserManager {
       logger.fileLog(`连接浏览器失败: ${error}`, 'ERROR');
       BrowserStateManager.clear();
       throw new Error('连接浏览器失败，请重新运行 start 命令', { cause: error });
+    }
+  }
+
+  private async applyStorageStateCookies(): Promise<void> {
+    try {
+      if (!this.context) return;
+      if (!fs.existsSync(STORAGE_STATE_FILE)) return;
+
+      const state = JSON.parse(fs.readFileSync(STORAGE_STATE_FILE, 'utf-8')) as {
+        cookies?: Array<{
+          name: string;
+          value: string;
+          domain: string;
+          path: string;
+          expires?: number;
+          httpOnly?: boolean;
+          secure?: boolean;
+          sameSite?: 'Strict' | 'Lax' | 'None';
+        }>;
+      };
+
+      const cookies = (state.cookies || []).filter((c) => c.name && c.domain);
+
+      if (cookies.length > 0) {
+        await this.context.addCookies(cookies);
+        logger.fileLog(`已从 storage-state 恢复 ${cookies.length} 个 Cookie`);
+      }
+    } catch (error) {
+      logger.fileLog(`应用 storage-state Cookie 失败: ${error}`, 'WARN');
     }
   }
 
